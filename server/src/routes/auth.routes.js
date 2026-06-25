@@ -26,10 +26,11 @@ const {
 
 const forgotPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: Number(process.env.FORGOT_PASSWORD_RATE_LIMIT_MAX || 10),
   message: { message: "Too many reset requests. Please try again in 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV !== "production",
 });
 
 router.get("/google", googleAuth);
