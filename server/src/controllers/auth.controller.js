@@ -161,6 +161,12 @@ const forgotPassword = async (req, res, next) => {
 
     res.json({ message: genericMessage });
   } catch (err) {
+    console.error("forgot-password error:", err.message);
+    if (err.status === 503) {
+      return res.status(503).json({
+        message: err.message || "Unable to send reset email. Please try again later.",
+      });
+    }
     next(err);
   }
 };

@@ -7,6 +7,16 @@ const BRAND_COLOR = "#FF5A5F";
 const getFromAddress = () =>
   process.env.EMAIL_FROM || process.env.SMTP_FROM || `${APP_NAME} <noreply@cravon.com>`;
 
+/** Parse "Name <email@x.com>" or plain email for SendGrid */
+const parseFromAddress = () => {
+  const raw = getFromAddress().trim();
+  const named = raw.match(/^"?([^"<]+)"?\s*<([^>]+)>$/);
+  if (named) {
+    return { name: named[1].trim(), email: named[2].trim() };
+  }
+  return { email: raw.replace(/"/g, ""), name: APP_NAME };
+};
+
 const getSmtpTransporter = () => {
   const host = process.env.SMTP_HOST;
   if (!host) return null;
@@ -85,9 +95,36 @@ const buildPasswordResetHtml = ({ name, resetUrl }) => `
 </html>
 `;
 
-const sendViaSendGrid = async ({ to, from, subject, html, text }) => {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  await sgMail.send({ to, from, subject, html, text });
+const sendViaSendGrid = async ({ to, subject, html, text }) => {
+  const apiKey = process.env.SENDGRID_API_KEY?.trim();
+  if (!apiKey) {
+    const err = new Error("SENDGRID_API_KEY is not configured");
+    err.status = 503;
+    throw err;
+  }
+
+  sgMail.setApiKey(apiKey);
+  const from = parseFromAddress();
+
+  try {
+    await sgMail.send({ to, from, subject, html, text });
+  } catch (err) {
+    const sgMessage = err.response?.body?.errors?.[0]?.message || err.message;
+    console.error("SendGrid send failed:", {
+      from: from.email,
+      to,
+      status: err.code,
+      errors: err.response?.body?.errors,
+    });
+
+    const emailErr = new Error(
+      err.code === 403 || /forbidden|verified|sender/i.test(sgMessage)
+        ? `SendGrid rejected the sender (${from.email}). Verify this email under SendGrid → Settings → Sender Authentication.`
+        : `Email delivery failed: ${sgMessage}`
+    );
+    emailErr.status = 503;
+    throw emailErr;
+  }
 };
 
 const sendViaSmtp = async ({ to, from, subject, html, text }) => {
@@ -103,8 +140,8 @@ const sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
   const html = buildPasswordResetHtml({ name, resetUrl });
   const text = `Hi ${name || "there"},\n\nReset your ${APP_NAME} password using this link (expires in 1 hour):\n${resetUrl}\n\nIf you didn't request this, ignore this email.`;
 
-  if (process.env.SENDGRID_API_KEY) {
-    await sendViaSendGrid({ to, from, subject, html, text });
+  if (process.env.SENDGRID_API_KEY?.trim()) {
+    await sendViaSendGrid({ to, subject, html, text });
     return { provider: "sendgrid" };
   }
 
