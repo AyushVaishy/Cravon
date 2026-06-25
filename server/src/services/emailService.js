@@ -1,7 +1,13 @@
 const nodemailer = require("nodemailer");
+const dns = require("dns");
 
 const APP_NAME = "Cravon";
 const BRAND_COLOR = "#FF5A5F";
+
+/** Render/cloud hosts often lack IPv6 egress — Gmail SMTP must use IPv4. */
+const ipv4Lookup = (hostname, _options, callback) => {
+  dns.lookup(hostname, { family: 4 }, callback);
+};
 
 const getTransporter = () => {
   const host = process.env.SMTP_HOST;
@@ -13,7 +19,14 @@ const getTransporter = () => {
     secure: process.env.SMTP_SECURE === "true",
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      pass: (process.env.SMTP_PASS || "").replace(/\s/g, ""),
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+    lookup: ipv4Lookup,
+    tls: {
+      minVersion: "TLSv1.2",
     },
   });
 };
