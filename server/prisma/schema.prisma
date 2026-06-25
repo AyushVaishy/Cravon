@@ -25,22 +25,44 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
+
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  password     String
-  name         String
-  phone        String?
-  role         Role      @default(USER)
-  refreshToken String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String       @id @default(uuid())
+  email         String       @unique
+  password      String?
+  googleId      String?      @unique
+  authProvider  AuthProvider @default(LOCAL)
+  emailVerified Boolean      @default(false)
+  name          String
+  phone         String?
+  role          Role         @default(USER)
+  refreshToken  String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   addresses    Address[]
   cart         Cart?
   orders       Order[]
   reviews      Review[]
   restaurants  Restaurant[] @relation("OwnerRestaurants")
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Address {

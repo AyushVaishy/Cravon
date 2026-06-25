@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const { errorHandler } = require("./middleware/errorHandler");
+const { getAllowedOrigins } = require("./config/urls");
 
 const authRoutes = require("./routes/auth.routes");
 const restaurantRoutes = require("./routes/restaurant.routes");
@@ -20,13 +21,10 @@ const app = express();
 // Security & parsing middleware
 app.use(helmet());
 const normalizeOrigin = (origin) => origin.replace(/\/$/, "");
-const ALLOWED_ORIGINS = (process.env.CLIENT_URL || "http://localhost:3000")
-  .split(",")
-  .map((o) => normalizeOrigin(o.trim()))
-  .filter(Boolean);
+const ALLOWED_ORIGINS = getAllowedOrigins().map(normalizeOrigin);
 
-if (process.env.NODE_ENV === "production" && !process.env.CLIENT_URL) {
-  console.warn("CORS warning: CLIENT_URL is not set in production. Only localhost fallback is configured.");
+if (process.env.NODE_ENV === "production") {
+  console.log(`CORS origins: ${ALLOWED_ORIGINS.join(", ")}`);
 }
 
 app.use(cors({
