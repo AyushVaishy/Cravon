@@ -21,9 +21,13 @@ import Error from "./components/Error";
 import OwnerDashboard from "./pages/OwnerDashboard";
 import OwnerOnboarding from "./pages/OwnerOnboarding";
 import AdminPanel from "./pages/AdminPanel";
+import GoogleAuthCallbackPage from "./pages/GoogleAuthCallbackPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 const appRouter = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
+  { path: "/auth/google/callback", element: <GoogleAuthCallbackPage /> },
+  { path: "/auth/reset-password", element: <ResetPasswordPage /> },
   { path: "/features", element: <FeaturesLandingPage /> },
   { path: "/about", element: <AboutLandingPage /> },
   { path: "/partner", element: <PartnerLandingPage /> },

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { logout as logoutAction } from "../store/authSlice";
-import { clearCart } from "../store/cartSlice";
+import { performLogout } from "../utils/authHelpers";
 import { selectUnreadCount, selectNotifications, markAllRead, clearNotifications } from "../store/notificationsSlice";
 import toast from "react-hot-toast";
 import { FaShoppingCart, FaTrash, FaEdit, FaPlus, FaSearch, FaMapMarkerAlt, FaUserCircle, FaStore } from "react-icons/fa";
@@ -272,9 +271,8 @@ const Header = ({ location, setLocation }) => {
   };
 
   // Handle logout
-  const handleLogout = () => {
-    dispatch(logoutAction());
-    dispatch(clearCart());
+  const handleLogout = async () => {
+    await performLogout(dispatch);
     toast.success('Logged out successfully');
     window.location.href = '/';
   };

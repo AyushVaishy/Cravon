@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { setCredentials, logout as logoutAction } from "../store/authSlice";
-import { clearCart } from "../store/cartSlice";
+import { performLogout } from "../utils/authHelpers";
+import { setCredentials } from "../store/authSlice";
 import { updateProfile, changePassword, getProfile } from "../services/authService";
+import { validatePassword } from "../utils/passwordValidation";
 import { getOrders } from "../services/orderService";
 import { Link } from "react-router-dom";
 import {
@@ -467,7 +468,8 @@ const SettingsTab = ({ onLogout }) => {
   const handleChangePassword = async (e) => {
     e.preventDefault();
     if (form.newPassword !== form.confirmPassword) { toast.error("Passwords do not match"); return; }
-    if (form.newPassword.length < 8) { toast.error("New password must be at least 8 characters"); return; }
+    const pwErr = validatePassword(form.newPassword);
+    if (pwErr) { toast.error(pwErr); return; }
     setSaving(true);
     try {
       await changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
@@ -558,9 +560,8 @@ const ProfilePage = () => {
     if (stored) localStorage.setItem("userData", JSON.stringify({ ...JSON.parse(stored), ...updatedUser }));
   }, [dispatch]);
 
-  const handleLogout = () => {
-    dispatch(logoutAction());
-    dispatch(clearCart());
+  const handleLogout = async () => {
+    await performLogout(dispatch);
     toast.success("Logged out successfully");
     navigate("/");
   };

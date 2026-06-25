@@ -1,13 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { setCredentials } from "../store/authSlice";
-import { login, signup } from "../services/authService";
-import {
-  FaTimes, FaUser, FaEnvelope, FaLock, FaPhone,
-  FaSignInAlt, FaStore, FaUtensils,
-} from "react-icons/fa";
+import { login, signup, forgotPassword } from "../services/authService";
+import { validatePassword, PASSWORD_HINT } from "../utils/passwordValidation";
+import { FaTimes, FaEye, FaEyeSlash } from "react-icons/fa";
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+const getGoogleAuthUrl = (role = "USER") => {
+  const params = new URLSearchParams({ role });
+  return `${API_BASE_URL}/auth/google?${params.toString()}`;
+};
 
 const ROLE_REDIRECT = {
   USER: "/home",
@@ -19,17 +24,63 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("login");
-  const [selectedRole, setSelectedRole] = useState(null);
-  const [formData, setFormData] = useState({ name: "", email: "", password: "", phone: "" });
+  const [selectedRole, setSelectedRole] = useState("USER");
+  const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    setIsDarkMode(document.documentElement.classList.contains('dark'));
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          setIsDarkMode(document.documentElement.classList.contains('dark'));
+        }
+      });
+    });
+    observer.observe(document.documentElement, { attributes: true });
+    return () => observer.disconnect();
+  }, []);
+
+  const lightFolderImages = [
+    "/assets/light_images/chad-montano-MqT0asuoIcU-unsplash.jpg",
+    "/assets/light_images/high-angle-indian-food-assortment.jpg",
+    "/assets/light_images/joseph-gonzalez-zcUgjyqEwe8-unsplash.jpg",
+    "/assets/light_images/luisa-brimble-2RrBE90w0T8-unsplash.jpg",
+    "/assets/light_images/vertical-view-delicious-dinner-fried-chicken-dish-with-various-spices-foods-garlics-fallen-oil-bottle-lemon-dark-color-background.jpg"
+  ];
+
+  const darkFolderImages = [
+    "/assets/dark_images/victoria-shes-UC0HZdUitWY-unsplash.jpg",
+    "/assets/dark_images/tasty-serbian-food-arrangement-flat-lay.jpg",
+    "/assets/dark_images/ikhsan-baihaqi-pbc2wXbQYpI-unsplash.jpg",
+    "/assets/dark_images/18hourshub-padrauna-ho-padrauna-restaurants-rtvk1fglif.avif",
+    "/assets/dark_images/odiseo-castrejon-1SPu0KT-Ejg-unsplash.jpg"
+  ];
+
+  const carouselImages = isDarkMode ? lightFolderImages : darkFolderImages;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const intervalId = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % carouselImages.length);
+    }, 3000);
+    return () => clearInterval(intervalId);
+  }, [isOpen, carouselImages.length]);
 
   const resetForm = () => {
-    setFormData({ name: "", email: "", password: "", phone: "" });
+    setFormData({ name: "", email: "", password: "", confirmPassword: "" });
+    setForgotEmail("");
+    setForgotSent(false);
     setErrors({});
     setApiError("");
-    setSelectedRole(null);
   };
 
   const switchTab = (tab) => { setActiveTab(tab); resetForm(); };
@@ -44,7 +95,6 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
   const validateLogin = () => {
     const e = {};
     if (!formData.email.trim()) e.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(formData.email)) e.email = "Invalid email";
     if (!formData.password.trim()) e.password = "Password is required";
     setErrors(e);
     return !Object.keys(e).length;
@@ -52,13 +102,12 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
 
   const validateSignup = () => {
     const e = {};
-    if (!formData.name.trim()) e.name = "Name is required";
+    if (!formData.name.trim()) e.name = "Username is required";
     if (!formData.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(formData.email)) e.email = "Invalid email";
-    if (!formData.password) e.password = "Password is required";
-    else if (formData.password.length < 8) e.password = "Min. 8 characters";
-    else if (!/[A-Z]/.test(formData.password)) e.password = "Must include an uppercase letter";
-    else if (!/[0-9]/.test(formData.password)) e.password = "Must include a digit";
+    const pwErr = validatePassword(formData.password);
+    if (pwErr) e.password = pwErr;
+    if (formData.password !== formData.confirmPassword) e.confirmPassword = "Passwords do not match";
     setErrors(e);
     return !Object.keys(e).length;
   };
@@ -67,6 +116,31 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
     localStorage.setItem("accessToken", accessToken);
     localStorage.setItem("userData", JSON.stringify(user));
     dispatch(setCredentials({ user, accessToken }));
+  };
+
+  const handleGoogleAuth = (role = "USER") => {
+    window.location.href = getGoogleAuthUrl(role);
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    const eMap = {};
+    if (!forgotEmail.trim()) eMap.email = "Email is required";
+    else if (!/\S+@\S+\.\S+/.test(forgotEmail)) eMap.email = "Invalid email";
+    setErrors(eMap);
+    if (Object.keys(eMap).length) return;
+
+    setIsSubmitting(true);
+    setApiError("");
+    try {
+      const res = await forgotPassword({ email: forgotEmail.trim() });
+      setForgotSent(true);
+      toast.success(res.data.message || "Check your email for reset instructions.");
+    } catch (err) {
+      setApiError(err?.response?.data?.message || "Could not send reset email. Try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleLogin = async (e) => {
@@ -96,7 +170,6 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
     setApiError("");
     try {
       const payload = { role: selectedRole, name: formData.name, email: formData.email, password: formData.password };
-      if (formData.phone.trim()) payload.phone = formData.phone.trim();
       const res = await signup(payload);
       const { user, accessToken } = res.data;
       persistAuth(user, accessToken);
@@ -119,187 +192,268 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
   };
 
   const inputClass = (field) =>
-    `w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-foreground placeholder:text-muted-foreground bg-card ${
-      errors[field] ? "border-red-400" : "border-border"
+    `w-full px-5 py-3 sm:py-3.5 border rounded-full outline-none transition-all text-sm font-medium text-foreground placeholder:text-muted-foreground bg-transparent ${
+      errors[field] ? "border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500" : "border-border focus:border-primary focus:ring-1 focus:ring-primary"
     }`;
+
+
 
   return (
     <>
+      {/* Main Modal Container */}
       <div
-        className={`fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-[9998] transition-opacity duration-300 ${
-          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-        onClick={onClose}
-      />
-
-      <div
-        className={`fixed top-0 right-0 h-full w-full sm:w-[420px] bg-card shadow-2xl z-[9999] transition-transform duration-300 overflow-y-auto ${
-          isOpen ? "translate-x-0" : "translate-x-full"
+        className={`fixed inset-0 bg-background z-[9999] transition-all duration-500 overflow-hidden ${
+          isOpen ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-8 scale-95 pointer-events-none"
         }`}
       >
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="bg-primary/50 text-white p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <FaSignInAlt /> Welcome to Cravon
-              </h2>
-              <button onClick={onClose} className="text-2xl hover:text-primary/70">
-                <FaTimes />
-              </button>
-            </div>
-            <div className="flex gap-2">
-              {["login", "signup"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => switchTab(tab)}
-                  className={`flex-1 py-2 rounded-lg font-semibold capitalize transition-all ${
-                    activeTab === tab ? "bg-card text-primary" : "bg-primary-hover text-white hover:bg-primary-hover"
-                  }`}
-                >
-                  {tab === "login" ? "Login" : "Sign Up"}
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Close Button */}
+        <button 
+          onClick={onClose} 
+          className={`absolute top-6 z-[60] w-10 h-10 bg-background/80 hover:bg-muted backdrop-blur-md rounded-full flex items-center justify-center text-foreground transition-all duration-[800ms] ease-in-out shadow-sm ${
+            activeTab === 'signup' ? 'right-6 lg:right-8' : 'left-6 lg:left-8'
+          }`}
+        >
+          <FaTimes className="text-lg" />
+        </button>
 
-          <div className="flex-1 p-6">
+        {/* Form Area */}
+        <div className={`absolute top-0 bottom-0 w-full lg:w-[45%] bg-background z-20 flex flex-col transition-all duration-[800ms] ease-in-out ${activeTab === 'signup' ? 'lg:left-[55%] left-0' : 'left-0'}`}>
+          <div className="flex-1 overflow-y-auto relative flex flex-col scrollbar-hide pt-16 pb-8">
+            <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-4 max-w-[480px] mx-auto w-full">
+            
             {apiError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl text-red-700 dark:text-red-400 text-sm text-center font-medium">
                 {apiError}
               </div>
             )}
 
-            {/* LOGIN FORM */}
+            {/* LOGIN FLOW */}
             {activeTab === "login" && (
-              <form onSubmit={handleLogin} className="space-y-5">
-                <div>
-                  <label className="block text-sm font-semibold text-foreground mb-1.5">
-                    <FaEnvelope className="inline mr-2 text-primary" />Email
-                  </label>
-                  <input type="email" name="email" value={formData.email} onChange={handleInputChange}
-                    className={inputClass("email")} placeholder="you@example.com" />
-                  {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground mb-2">Welcome Back!</h1>
+                <p className="text-muted-foreground font-medium mb-6 text-sm">Sign in with your Email and Password.</p>
+
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div>
+                    <input type="email" name="email" value={formData.email} onChange={handleInputChange}
+                      className={inputClass("email")} placeholder="Email" />
+                    {errors.email && <p className="text-red-500 text-xs mt-1.5 ml-4">{errors.email}</p>}
+                  </div>
+                  
+                  <div>
+                    <input type="password" name="password" value={formData.password} onChange={handleInputChange}
+                      className={inputClass("password")} placeholder="Password" />
+                    {errors.password && <p className="text-red-500 text-xs mt-1.5 ml-4">{errors.password}</p>}
+                    <div className="flex justify-end mt-2">
+                      <button
+                        type="button"
+                        onClick={() => { setActiveTab("forgot"); setApiError(""); setErrors({}); setForgotSent(false); }}
+                        className="text-sm font-bold text-foreground hover:text-primary transition-colors"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={isSubmitting}
+                    className="w-full bg-primary hover:opacity-90 text-white py-3 sm:py-3.5 rounded-full font-bold text-base transition-all mt-4 flex items-center justify-center disabled:opacity-60">
+                    {isSubmitting ? <div className="animate-spin h-5 w-5 border-b-2 border-current rounded-full" /> : "Login"}
+                  </button>
+                </form>
+
+                <div className="flex items-center gap-4 my-6">
+                  <div className="flex-1 h-px bg-border"></div>
+                  <span className="text-muted-foreground text-sm font-medium">or login with</span>
+                  <div className="flex-1 h-px bg-border"></div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-foreground mb-1.5">
-                    <FaLock className="inline mr-2 text-primary" />Password
-                  </label>
-                  <input type="password" name="password" value={formData.password} onChange={handleInputChange}
-                    className={inputClass("password")} placeholder="Your password" />
-                  {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
+
+                <div className="space-y-4">
+                  <button
+                    type="button"
+                    onClick={() => handleGoogleAuth("USER")}
+                    className="w-full flex items-center justify-center gap-3 py-3 border border-border rounded-full hover:bg-muted transition-colors font-bold text-foreground text-sm"
+                  >
+                    <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" alt="Google" />
+                    Login with Google
+                  </button>
+                  <button className="w-full flex items-center justify-center gap-3 py-3 border border-border rounded-full hover:bg-muted transition-colors font-bold text-foreground text-sm">
+                    <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" className="w-5 h-5" alt="Facebook" />
+                    Login with Facebook
+                  </button>
                 </div>
-                <button type="submit" disabled={isSubmitting}
-                  className="w-full bg-primary/50 hover:bg-primary-hover text-white py-3.5 rounded-xl font-semibold text-base transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                  {isSubmitting ? (
-                    <><div className="animate-spin h-5 w-5 border-b-2 border-white rounded-full" /> Signing in...</>
-                  ) : "Sign In"}
-                </button>
-              </form>
+
+                <p className="text-center text-muted-foreground mt-6 font-medium text-xs sm:text-sm">
+                  Did not have any account? <button onClick={() => switchTab('signup')} className="text-foreground font-extrabold hover:text-primary transition-colors ml-1">Register Now</button>
+                </p>
+              </div>
             )}
 
             {/* SIGNUP FLOW */}
             {activeTab === "signup" && (
-              <>
-                {/* Step 1: Role selection */}
-                {!selectedRole && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground mb-2">Create an account</h1>
+                <p className="text-muted-foreground font-medium mb-6 text-sm">Sign up with your valid email and password.</p>
+
+                {/* Role Toggle */}
+                <div className="flex bg-muted/50 p-1 rounded-full w-max mb-6 border border-border">
+                  <button type="button" onClick={() => setSelectedRole("USER")}
+                    className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${selectedRole === 'USER' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                    Customer
+                  </button>
+                  <button type="button" onClick={() => setSelectedRole("RESTAURANT_OWNER")}
+                    className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${selectedRole === 'RESTAURANT_OWNER' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                    Restaurant Owner
+                  </button>
+                </div>
+
+                <form onSubmit={handleSignup} className="space-y-4">
                   <div>
-                    <p className="text-muted-foreground text-sm mb-4 font-medium">I want to join as a…</p>
-                    <div className="grid grid-cols-1 gap-4">
-                      <button onClick={() => setSelectedRole("USER")}
-                        className="flex items-center gap-4 p-5 border-2 border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-left group">
-                        <div className="bg-primary/10 group-hover:bg-primary/20 p-3 rounded-lg">
-                          <FaUser className="text-primary text-xl" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground">Customer</p>
-                          <p className="text-sm text-muted-foreground">Order food from nearby restaurants</p>
-                        </div>
-                      </button>
-                      <button onClick={() => setSelectedRole("RESTAURANT_OWNER")}
-                        className="flex items-center gap-4 p-5 border-2 border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-left group">
-                        <div className="bg-primary/10 group-hover:bg-primary/20 p-3 rounded-lg">
-                          <FaStore className="text-primary text-xl" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground">Restaurant Owner</p>
-                          <p className="text-sm text-muted-foreground">List your restaurant and manage orders</p>
-                        </div>
-                      </button>
-                    </div>
+                    <input type="text" name="name" value={formData.name} onChange={handleInputChange}
+                      className={inputClass("name")} placeholder="Username" />
+                    {errors.name && <p className="text-red-500 text-xs mt-1.5 ml-4">{errors.name}</p>}
                   </div>
-                )}
-
-                {/* Step 2: Account details */}
-                {selectedRole && (
-                  <form onSubmit={handleSignup} className="space-y-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2 bg-primary/5 border border-primary/30 px-3 py-1.5 rounded-lg">
-                        {selectedRole === "USER" ? <FaUser className="text-primary text-sm" /> : <FaStore className="text-primary text-sm" />}
-                        <span className="text-sm font-medium text-primary">
-                          {selectedRole === "USER" ? "Customer" : "Restaurant Owner"}
-                        </span>
-                      </div>
-                      <button type="button" onClick={() => setSelectedRole(null)}
-                        className="text-xs text-muted-foreground hover:text-muted-foreground underline">Change</button>
-                    </div>
-
-                    {selectedRole === "RESTAURANT_OWNER" && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
-                        <FaUtensils className="inline mr-2" />
-                        After creating your account, you'll set up your restaurant details.
-                      </div>
+                  <div>
+                    <input type="email" name="email" value={formData.email} onChange={handleInputChange}
+                      className={inputClass("email")} placeholder="Email" />
+                    {errors.email && <p className="text-red-500 text-xs mt-1.5 ml-4">{errors.email}</p>}
+                  </div>
+                  <div className="relative">
+                    <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleInputChange}
+                      className={inputClass("password")} placeholder="Password" />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showPassword ? <FaEyeSlash /> : <FaEye />}
+                    </button>
+                    {errors.password ? (
+                      <p className="text-red-500 text-xs mt-1.5 ml-4">{errors.password}</p>
+                    ) : (
+                      <p className="text-muted-foreground text-xs mt-1.5 ml-4">{PASSWORD_HINT}</p>
                     )}
+                  </div>
+                  <div className="relative">
+                    <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange}
+                      className={inputClass("confirmPassword")} placeholder="Confirm Password" />
+                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                    </button>
+                    {errors.confirmPassword && <p className="text-red-500 text-xs mt-1.5 ml-4">{errors.confirmPassword}</p>}
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-semibold text-foreground mb-1.5">
-                        <FaUser className="inline mr-2 text-primary" />Full Name
-                      </label>
-                      <input type="text" name="name" value={formData.name} onChange={handleInputChange}
-                        className={inputClass("name")} placeholder="Your full name" />
-                      {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-foreground mb-1.5">
-                        <FaEnvelope className="inline mr-2 text-primary" />Email
-                      </label>
-                      <input type="email" name="email" value={formData.email} onChange={handleInputChange}
-                        className={inputClass("email")} placeholder="you@example.com" />
-                      {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-foreground mb-1.5">
-                        <FaLock className="inline mr-2 text-primary" />Password
-                      </label>
-                      <input type="password" name="password" value={formData.password} onChange={handleInputChange}
-                        className={inputClass("password")} placeholder="Min. 8 chars, 1 uppercase, 1 digit" />
-                      {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-foreground mb-1.5">
-                        <FaPhone className="inline mr-2 text-primary" />Phone
-                        <span className="font-normal text-muted-foreground ml-1">(optional)</span>
-                      </label>
-                      <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange}
-                        className={inputClass("phone")} placeholder="10-digit mobile number" />
-                    </div>
+                  <button type="submit" disabled={isSubmitting}
+                    className="w-full bg-primary hover:opacity-90 text-white py-3 sm:py-3.5 rounded-full font-bold text-base transition-all mt-4 flex items-center justify-center disabled:opacity-60">
+                    {isSubmitting ? <div className="animate-spin h-5 w-5 border-b-2 border-current rounded-full" /> : selectedRole === "RESTAURANT_OWNER" ? "Sign Up as Owner" : "Sign Up"}
+                  </button>
+                </form>
 
+                <div className="flex items-center gap-4 my-6">
+                  <div className="flex-1 h-px bg-border"></div>
+                  <span className="text-muted-foreground text-sm font-medium">or sign up with</span>
+                  <div className="flex-1 h-px bg-border"></div>
+                </div>
+
+                <div className="space-y-4">
+                  <button
+                    type="button"
+                    onClick={() => handleGoogleAuth(selectedRole)}
+                    className="w-full flex items-center justify-center gap-3 py-3 border border-border rounded-full hover:bg-muted transition-colors font-bold text-foreground text-sm"
+                  >
+                    <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" alt="Google" />
+                    Sign up with Google
+                  </button>
+                  <button className="w-full flex items-center justify-center gap-3 py-3 border border-border rounded-full hover:bg-muted transition-colors font-bold text-foreground text-sm">
+                    <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" className="w-5 h-5" alt="Facebook" />
+                    Sign up with Facebook
+                  </button>
+                </div>
+
+                <p className="text-center text-muted-foreground mt-6 font-medium text-xs sm:text-sm">
+                  Already have an account? <button onClick={() => switchTab('login')} className="text-foreground font-extrabold hover:text-primary transition-colors ml-1">Login</button>
+                </p>
+              </div>
+            )}
+
+            {/* FORGOT PASSWORD */}
+            {activeTab === "forgot" && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground mb-2">Forgot password?</h1>
+                <p className="text-muted-foreground font-medium mb-6 text-sm">
+                  {forgotSent
+                    ? "If an account exists with that email, we've sent a secure reset link. Check your inbox and spam folder."
+                    : "Enter your email and we'll send you a link to reset your password."}
+                </p>
+
+                {forgotSent ? (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-2xl text-green-800 dark:text-green-300 text-sm text-center font-medium">
+                      Reset link sent to <strong>{forgotEmail}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => switchTab("login")}
+                      className="w-full bg-primary hover:opacity-90 text-white py-3 sm:py-3.5 rounded-full font-bold text-base transition-all"
+                    >
+                      Back to login
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                    <div>
+                      <input
+                        type="email"
+                        name="forgotEmail"
+                        value={forgotEmail}
+                        onChange={(e) => { setForgotEmail(e.target.value); setErrors((p) => ({ ...p, email: "" })); setApiError(""); }}
+                        className={inputClass("email")}
+                        placeholder="Email address"
+                        autoComplete="email"
+                      />
+                      {errors.email && <p className="text-red-500 text-xs mt-1.5 ml-4">{errors.email}</p>}
+                    </div>
                     <button type="submit" disabled={isSubmitting}
-                      className="w-full bg-primary/50 hover:bg-primary-hover text-white py-3.5 rounded-xl font-semibold text-base transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                      {isSubmitting ? (
-                        <><div className="animate-spin h-5 w-5 border-b-2 border-white rounded-full" /> Creating account...</>
-                      ) : selectedRole === "RESTAURANT_OWNER" ? (
-                        "Create Account & Set Up Restaurant →"
-                      ) : "Create Account"}
+                      className="w-full bg-primary hover:opacity-90 text-white py-3 sm:py-3.5 rounded-full font-bold text-base transition-all mt-4 flex items-center justify-center disabled:opacity-60">
+                      {isSubmitting ? <div className="animate-spin h-5 w-5 border-b-2 border-current rounded-full" /> : "Send reset link"}
+                    </button>
+                    <button type="button" onClick={() => switchTab("login")}
+                      className="w-full text-muted-foreground hover:text-foreground font-bold text-sm py-2 transition-colors">
+                      ← Back to login
                     </button>
                   </form>
                 )}
-              </>
+              </div>
             )}
+          </div>
+        </div>
+        </div>
 
-            <p className="mt-6 text-xs text-muted-foreground text-center">
-              By continuing, you agree to our Terms of Service and Privacy Policy.
-            </p>
+        {/* Image Area */}
+        <div className={`hidden lg:block absolute top-0 bottom-0 w-[55%] z-10 p-4 lg:p-6 bg-background transition-all duration-[800ms] ease-in-out ${activeTab === 'signup' ? 'left-0' : 'left-[45%]'}`}>
+          <div className="w-full h-full relative rounded-[2rem] overflow-hidden bg-zinc-950">
+            {carouselImages.map((src, index) => (
+              <img 
+                key={index}
+                src={src} 
+                alt={`Auth Background ${index + 1}`} 
+                className={`absolute inset-0 w-full h-full object-cover transition-all duration-[1500ms] ease-in-out ${
+                  index === currentImageIndex 
+                    ? 'opacity-100 scale-100 z-10' 
+                    : 'opacity-0 scale-105 z-0'
+                }`}
+              />
+            ))}
+            {/* Dark overlay gradient at bottom for dots */}
+            <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none z-20"></div>
+            
+            {/* Carousel Dots */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-30">
+              {carouselImages.map((_, index) => (
+                <div
+                  key={index}
+                  onClick={() => setCurrentImageIndex(index)}
+                  className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                    index === currentImageIndex ? "w-6 bg-white" : "w-2 bg-white/40 hover:bg-white/60"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -308,3 +462,4 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
 };
 
 export default SignInSidebar;
+
