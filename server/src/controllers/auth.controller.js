@@ -157,15 +157,7 @@ const forgotPassword = async (req, res, next) => {
     const frontendUrl = getFrontendUrl();
     const resetUrl = `${frontendUrl}/auth/reset-password?token=${rawToken}`;
 
-    try {
-      await sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl });
-    } catch (emailErr) {
-      console.error("Forgot password email failed:", emailErr.message);
-      await prisma.passwordResetToken.deleteMany({ where: { tokenHash } });
-      return res.status(503).json({
-        message: "Could not send reset email right now. Please try again in a few minutes.",
-      });
-    }
+    await sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl });
 
     res.json({ message: genericMessage });
   } catch (err) {

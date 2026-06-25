@@ -1,15 +1,13 @@
 const nodemailer = require("nodemailer");
-const dns = require("dns");
+const sgMail = require("@sendgrid/mail");
 
 const APP_NAME = "Cravon";
 const BRAND_COLOR = "#FF5A5F";
 
-/** Render/cloud hosts often lack IPv6 egress — Gmail SMTP must use IPv4. */
-const ipv4Lookup = (hostname, _options, callback) => {
-  dns.lookup(hostname, { family: 4 }, callback);
-};
+const getFromAddress = () =>
+  process.env.EMAIL_FROM || process.env.SMTP_FROM || `${APP_NAME} <noreply@cravon.com>`;
 
-const getTransporter = () => {
+const getSmtpTransporter = () => {
   const host = process.env.SMTP_HOST;
   if (!host) return null;
 
@@ -19,14 +17,7 @@ const getTransporter = () => {
     secure: process.env.SMTP_SECURE === "true",
     auth: {
       user: process.env.SMTP_USER,
-      pass: (process.env.SMTP_PASS || "").replace(/\s/g, ""),
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
-    lookup: ipv4Lookup,
-    tls: {
-      minVersion: "TLSv1.2",
+      pass: process.env.SMTP_PASS,
     },
   });
 };
@@ -94,23 +85,37 @@ const buildPasswordResetHtml = ({ name, resetUrl }) => `
 </html>
 `;
 
+const sendViaSendGrid = async ({ to, from, subject, html, text }) => {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  await sgMail.send({ to, from, subject, html, text });
+};
+
+const sendViaSmtp = async ({ to, from, subject, html, text }) => {
+  const transporter = getSmtpTransporter();
+  if (!transporter) return false;
+  await transporter.sendMail({ from, to, subject, html, text });
+  return true;
+};
+
 const sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
-  const from = process.env.SMTP_FROM || `"${APP_NAME}" <noreply@cravon.com>`;
+  const from = getFromAddress();
   const subject = `Reset your ${APP_NAME} password`;
   const html = buildPasswordResetHtml({ name, resetUrl });
   const text = `Hi ${name || "there"},\n\nReset your ${APP_NAME} password using this link (expires in 1 hour):\n${resetUrl}\n\nIf you didn't request this, ignore this email.`;
 
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.log("\n--- PASSWORD RESET (SMTP not configured) ---");
-    console.log(`To: ${to}`);
-    console.log(`Reset link: ${resetUrl}`);
-    console.log("--------------------------------------------\n");
-    return { devMode: true };
+  if (process.env.SENDGRID_API_KEY) {
+    await sendViaSendGrid({ to, from, subject, html, text });
+    return { provider: "sendgrid" };
   }
 
-  await transporter.sendMail({ from, to, subject, html, text });
-  return { devMode: false };
+  const smtpSent = await sendViaSmtp({ to, from, subject, html, text }).catch(() => false);
+  if (smtpSent) return { provider: "smtp" };
+
+  console.log("\n--- PASSWORD RESET (no email provider configured) ---");
+  console.log(`To: ${to}`);
+  console.log(`Reset link: ${resetUrl}`);
+  console.log("----------------------------------------------------\n");
+  return { provider: "console" };
 };
 
 module.exports = { sendPasswordResetEmail };
