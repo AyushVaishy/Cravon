@@ -3,7 +3,7 @@ import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { setCredentials } from "../store/authSlice";
-import { login, signup, forgotPassword } from "../services/authService";
+import { login, signup, forgotPassword, verifyEmail, resendVerification } from "../services/authService";
 import { validatePassword, PASSWORD_HINT } from "../utils/passwordValidation";
 import { FaTimes, FaEye, FaEyeSlash } from "react-icons/fa";
 
@@ -14,20 +14,28 @@ const getGoogleAuthUrl = (role = "USER") => {
   return `${API_BASE_URL}/auth/google?${params.toString()}`;
 };
 
+const getFacebookAuthUrl = (role = "USER") => {
+  const params = new URLSearchParams({ role });
+  return `${API_BASE_URL}/auth/facebook?${params.toString()}`;
+};
+
 const ROLE_REDIRECT = {
   USER: "/home",
   RESTAURANT_OWNER: "/owner",
   ADMIN: "/admin",
 };
 
-const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
+const SignInSidebar = ({ isOpen, onClose, onSignIn, initialTab = "login" }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("login");
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedRole, setSelectedRole] = useState("USER");
   const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
+  const [verifyEmailAddr, setVerifyEmailAddr] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +45,18 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
-    setIsDarkMode(document.documentElement.classList.contains('dark'));
+    if (!isOpen) return;
+    setActiveTab(initialTab);
+  }, [isOpen, initialTab]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    setIsDarkMode(document.documentElement.classList.contains("dark"));
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.attributeName === 'class') {
@@ -79,11 +98,27 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
     setFormData({ name: "", email: "", password: "", confirmPassword: "" });
     setForgotEmail("");
     setForgotSent(false);
+    setVerifyEmailAddr("");
+    setOtpCode("");
     setErrors({});
     setApiError("");
   };
 
-  const switchTab = (tab) => { setActiveTab(tab); resetForm(); };
+  const switchTab = (tab) => { setActiveTab(tab); if (tab !== "verify") resetForm(); else { setErrors({}); setApiError(""); } };
+
+  const finishAuth = (user, accessToken) => {
+    persistAuth(user, accessToken);
+    toast.success(`Welcome${user.name ? `, ${user.name}` : ""}!`);
+    if (onSignIn) onSignIn(user);
+    onClose();
+    const returnTo = sessionStorage.getItem("auth_return_to");
+    if (returnTo) {
+      sessionStorage.removeItem("auth_return_to");
+      navigate(returnTo);
+      return;
+    }
+    navigate(selectedRole === "RESTAURANT_OWNER" ? "/owner/onboard" : (ROLE_REDIRECT[user.role] || "/home"));
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -122,6 +157,10 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
     window.location.href = getGoogleAuthUrl(role);
   };
 
+  const handleFacebookAuth = (role = "USER") => {
+    window.location.href = getFacebookAuthUrl(role);
+  };
+
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     const eMap = {};
@@ -151,13 +190,17 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
     try {
       const res = await login({ email: formData.email, password: formData.password });
       const { user, accessToken } = res.data;
-      persistAuth(user, accessToken);
-      toast.success(`Welcome back, ${user.name}!`);
-      if (onSignIn) onSignIn(user);
-      onClose();
-      navigate(ROLE_REDIRECT[user.role] || "/home");
+      finishAuth(user, accessToken);
     } catch (err) {
-      setApiError(err?.response?.data?.message || "Login failed. Check your credentials.");
+      const data = err?.response?.data;
+      if (data?.needsVerification && data?.email) {
+        setVerifyEmailAddr(data.email);
+        setActiveTab("verify");
+        setResendCooldown(60);
+        toast.success("Enter the verification code sent to your email.");
+      } else {
+        setApiError(data?.message || "Login failed. Check your credentials.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -171,12 +214,14 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
     try {
       const payload = { role: selectedRole, name: formData.name, email: formData.email, password: formData.password };
       const res = await signup(payload);
-      const { user, accessToken } = res.data;
-      persistAuth(user, accessToken);
-      toast.success(`Welcome to Cravon, ${user.name}!`);
-      if (onSignIn) onSignIn(user);
-      onClose();
-      navigate(selectedRole === "RESTAURANT_OWNER" ? "/owner/onboard" : (ROLE_REDIRECT[user.role] || "/home"));
+      if (res.data.pendingVerification) {
+        setVerifyEmailAddr(res.data.email || formData.email);
+        setActiveTab("verify");
+        setResendCooldown(60);
+        toast.success(res.data.message || "Check your email for the verification code.");
+      } else {
+        finishAuth(res.data.user, res.data.accessToken);
+      }
     } catch (err) {
       const data = err?.response?.data;
       if (data?.errors?.length) {
@@ -186,6 +231,40 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
       } else {
         setApiError(data?.message || "Signup failed. Please try again.");
       }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyEmail = async (e) => {
+    e.preventDefault();
+    const code = otpCode.replace(/\D/g, "");
+    if (code.length !== 6) {
+      setErrors({ otp: "Enter the 6-digit code from your email" });
+      return;
+    }
+    setIsSubmitting(true);
+    setApiError("");
+    setErrors({});
+    try {
+      const res = await verifyEmail({ email: verifyEmailAddr, code });
+      finishAuth(res.data.user, res.data.accessToken);
+    } catch (err) {
+      setApiError(err?.response?.data?.message || "Verification failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (resendCooldown > 0 || !verifyEmailAddr) return;
+    setIsSubmitting(true);
+    try {
+      const res = await resendVerification({ email: verifyEmailAddr });
+      toast.success(res.data.message || "New code sent!");
+      setResendCooldown(60);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Could not resend code.");
     } finally {
       setIsSubmitting(false);
     }
@@ -276,7 +355,11 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
                     <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" alt="Google" />
                     Login with Google
                   </button>
-                  <button className="w-full flex items-center justify-center gap-3 py-3 border border-border rounded-full hover:bg-muted transition-colors font-bold text-foreground text-sm">
+                  <button
+                    type="button"
+                    onClick={() => handleFacebookAuth("USER")}
+                    className="w-full flex items-center justify-center gap-3 py-3 border border-border rounded-full hover:bg-muted transition-colors font-bold text-foreground text-sm"
+                  >
                     <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" className="w-5 h-5" alt="Facebook" />
                     Login with Facebook
                   </button>
@@ -359,7 +442,11 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
                     <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" alt="Google" />
                     Sign up with Google
                   </button>
-                  <button className="w-full flex items-center justify-center gap-3 py-3 border border-border rounded-full hover:bg-muted transition-colors font-bold text-foreground text-sm">
+                  <button
+                    type="button"
+                    onClick={() => handleFacebookAuth(selectedRole)}
+                    className="w-full flex items-center justify-center gap-3 py-3 border border-border rounded-full hover:bg-muted transition-colors font-bold text-foreground text-sm"
+                  >
                     <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" className="w-5 h-5" alt="Facebook" />
                     Sign up with Facebook
                   </button>
@@ -367,6 +454,64 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn }) => {
 
                 <p className="text-center text-muted-foreground mt-6 font-medium text-xs sm:text-sm">
                   Already have an account? <button onClick={() => switchTab('login')} className="text-foreground font-extrabold hover:text-primary transition-colors ml-1">Login</button>
+                </p>
+              </div>
+            )}
+
+            {/* EMAIL VERIFICATION */}
+            {activeTab === "verify" && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground mb-2">Verify your email</h1>
+                <p className="text-muted-foreground font-medium mb-6 text-sm">
+                  We sent a 6-digit code to{" "}
+                  <span className="font-bold text-foreground">{verifyEmailAddr || "your email"}</span>.
+                  Enter it below to activate your account.
+                </p>
+
+                <form onSubmit={handleVerifyEmail} className="space-y-4">
+                  <div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(e) => {
+                        setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                        setErrors((p) => ({ ...p, otp: "" }));
+                      }}
+                      className={`${inputClass("otp")} text-center text-2xl tracking-[0.5em] font-extrabold`}
+                      placeholder="000000"
+                    />
+                    {errors.otp && <p className="text-red-500 text-xs mt-1.5 ml-4 text-center">{errors.otp}</p>}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || otpCode.length !== 6}
+                    className="w-full bg-primary hover:opacity-90 text-white py-3 sm:py-3.5 rounded-full font-bold text-base transition-all flex items-center justify-center disabled:opacity-60"
+                  >
+                    {isSubmitting ? <div className="animate-spin h-5 w-5 border-b-2 border-current rounded-full" /> : "Verify & Continue"}
+                  </button>
+                </form>
+
+                <p className="text-center text-muted-foreground mt-6 text-sm">
+                  Didn&apos;t receive the code?{" "}
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendCooldown > 0 || isSubmitting}
+                    className="font-extrabold text-foreground hover:text-primary transition-colors disabled:opacity-50"
+                  >
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                  </button>
+                </p>
+
+                <p className="text-center text-muted-foreground mt-4 text-xs">
+                  Wrong email?{" "}
+                  <button type="button" onClick={() => switchTab("signup")} className="font-bold text-primary hover:underline">
+                    Go back to signup
+                  </button>
                 </p>
               </div>
             )}

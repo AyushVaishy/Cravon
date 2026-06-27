@@ -16,6 +16,7 @@ import LandingLayout, { useLandingUi } from "../components/landing/LandingLayout
 
 const LandingHomeContent = () => {
   const { openAuth } = useLandingUi();
+  const navigate = useNavigate();
 
   const featureCards = [
     {
@@ -86,10 +87,11 @@ const LandingHomeContent = () => {
                 />
               </div>
               <button
-                onClick={openAuth}
+                type="button"
+                onClick={() => navigate("/home")}
                 className="w-full shrink-0 rounded-2xl bg-brand px-8 py-3 font-bold text-white transition-colors hover:bg-brand-dark sm:w-auto"
               >
-                Explore
+                Browse restaurants
               </button>
             </div>
 

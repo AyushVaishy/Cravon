@@ -19,8 +19,18 @@ const DashboardSidebar = ({ isDark }) => {
   const routeLocation = useLocation();
   const cartItems = useSelector((s) => s.cart.items);
   const user = useSelector((s) => s.auth.user);
+  const isAuthenticated = useSelector((s) => s.auth.isAuthenticated) || !!localStorage.getItem("accessToken");
   const cartCount = cartItems.reduce((a, i) => a + (i.quantity || 1), 0);
   const brandIcon = `${process.env.PUBLIC_URL}/${isDark ? "cravon_dark_mode_icon.png" : "cravon_light_mode_icon.png"}`;
+
+  const openSignIn = () => window.dispatchEvent(new Event("openSignIn"));
+
+  const handleProfileClick = (e) => {
+    if (!isAuthenticated) {
+      e.preventDefault();
+      openSignIn();
+    }
+  };
 
   const isActive = (to) =>
     to === "/home"
@@ -74,7 +84,8 @@ const DashboardSidebar = ({ isDark }) => {
         {/* Profile at bottom */}
         <Link
           to="/home/profile"
-          title="Profile"
+          onClick={handleProfileClick}
+          title={isAuthenticated ? "Profile" : "Sign in"}
           className="w-11 h-11 mb-2 rounded-full overflow-hidden ring-2 ring-gray-100 dark:ring-white/10 hover:ring-[#FF5A5F]/60 hover:scale-110 transition-all duration-300 flex-shrink-0 shadow-sm"
         >
           {user?.avatar ? (
@@ -115,6 +126,7 @@ const DashboardSidebar = ({ isDark }) => {
         ))}
         <Link
           to="/home/profile"
+          onClick={handleProfileClick}
           className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 transition-colors"
         >
           <div className="p-2 rounded-full">

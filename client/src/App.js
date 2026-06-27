@@ -22,11 +22,13 @@ import OwnerDashboard from "./pages/OwnerDashboard";
 import OwnerOnboarding from "./pages/OwnerOnboarding";
 import AdminPanel from "./pages/AdminPanel";
 import GoogleAuthCallbackPage from "./pages/GoogleAuthCallbackPage";
+import FacebookAuthCallbackPage from "./pages/FacebookAuthCallbackPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 const appRouter = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
   { path: "/auth/google/callback", element: <GoogleAuthCallbackPage /> },
+  { path: "/auth/facebook/callback", element: <FacebookAuthCallbackPage /> },
   { path: "/auth/reset-password", element: <ResetPasswordPage /> },
   { path: "/features", element: <FeaturesLandingPage /> },
   { path: "/about", element: <AboutLandingPage /> },
@@ -58,11 +60,7 @@ const appRouter = createBrowserRouter([
   },
   {
     path: "/home",
-    element: (
-      <ProtectedRoute>
-        <DashboardLayout />
-      </ProtectedRoute>
-    ),
+    element: <DashboardLayout />,
     errorElement: <Error />,
     children: [
       { path: "", element: <HomePage /> },
@@ -70,10 +68,31 @@ const appRouter = createBrowserRouter([
       { path: "contact", element: <ContactPage /> },
       { path: "restaurants/:resId", element: <RestaurantMenuPage /> },
       { path: "cart", element: <CartPage /> },
-      { path: "orders", element: <OrdersPage /> },
-      { path: "orders/:orderId", element: <OrderDetailPage /> },
-      { path: "profile", element: <ProfilePage /> },
       { path: "search", element: <SearchResultsPage /> },
+      {
+        path: "orders",
+        element: (
+          <ProtectedRoute>
+            <OrdersPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "orders/:orderId",
+        element: (
+          <ProtectedRoute>
+            <OrderDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "profile",
+        element: (
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 ]);

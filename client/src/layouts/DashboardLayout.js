@@ -304,6 +304,7 @@ const DashboardLayout = () => {
   const [isDark,        setIsDark]        = useState(false);
   const [locationOpen,  setLocationOpen]  = useState(false);
   const [signInOpen,    setSignInOpen]    = useState(false);
+  const [signInTab,     setSignInTab]     = useState("login");
 
   const handleSetLocation = (loc) => {
     setLocation(loc);
@@ -335,7 +336,11 @@ const DashboardLayout = () => {
 
   // Listen for sign-in open event
   useEffect(() => {
-    const handler = () => setSignInOpen(true);
+    const handler = (e) => {
+      const tab = e?.detail?.tab || "login";
+      setSignInTab(tab);
+      setSignInOpen(true);
+    };
     window.addEventListener("openSignIn", handler);
     return () => window.removeEventListener("openSignIn", handler);
   }, []);
@@ -369,7 +374,7 @@ const DashboardLayout = () => {
         location={location}
         setLocation={handleSetLocation}
       />
-      <SignInSidebar isOpen={signInOpen} onClose={() => setSignInOpen(false)} />
+      <SignInSidebar isOpen={signInOpen} onClose={() => setSignInOpen(false)} initialTab={signInTab} />
 
       {/* AI Chat Widget */}
       <ChatWidget />

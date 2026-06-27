@@ -4,28 +4,34 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { performLogout } from "../utils/authHelpers";
 import { setCredentials } from "../store/authSlice";
-import { updateProfile, changePassword, getProfile } from "../services/authService";
-import { validatePassword } from "../utils/passwordValidation";
+import { updateProfile, changePassword, getProfile, forgotPassword } from "../services/authService";
 import { getOrders } from "../services/orderService";
 import { Link } from "react-router-dom";
 import {
   FaUserCircle, FaEnvelope, FaPhone, FaLock, FaStar,
-  FaBoxOpen, FaMoon, FaSun, FaSignOutAlt,
+  FaBoxOpen, FaMoon, FaSun, FaSignOutAlt, FaUser, FaHeart,
+  FaMapMarkerAlt, FaHome, FaBriefcase, FaMapPin, FaTrash, FaPlus,
+  FaCog, FaGoogle, FaFacebook, FaShieldAlt,
 } from "react-icons/fa";
 import { FiEdit2, FiSave, FiX } from "react-icons/fi";
 import { getAddresses, addAddress, deleteAddress } from "../services/addressService";
 import { selectFavourites } from "../store/favoritesSlice";
 import RestaurantCard from "../components/RestaurantCard";
-import { FaHeart, FaMapMarkerAlt, FaHome, FaBriefcase, FaMapPin, FaTrash, FaPlus } from "react-icons/fa";
+import { validatePassword, PASSWORD_HINT } from "../utils/passwordValidation";
 import api from "../services/api";
 
+const CARD =
+  "rounded-2xl border border-border/80 bg-white/90 dark:bg-zinc-900/70 backdrop-blur-md shadow-sm";
+const INPUT =
+  "w-full border border-border rounded-xl px-4 py-2.5 text-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/40 focus:border-primary outline-none transition";
+
 const TABS = [
-  { id: "profile", label: "My Profile", icon: "👤" },
-  { id: "orders", label: "My Orders", icon: "📦" },
-  { id: "favourites", label: "Favourites", icon: "❤️" },
-  { id: "reviews", label: "My Reviews", icon: "⭐" },
-  { id: "addresses", label: "Addresses", icon: "📍" },
-  { id: "settings", label: "Settings", icon: "⚙️" },
+  { id: "profile", label: "My Profile", Icon: FaUser },
+  { id: "orders", label: "My Orders", Icon: FaBoxOpen },
+  { id: "favourites", label: "Favourites", Icon: FaHeart },
+  { id: "reviews", label: "My Reviews", Icon: FaStar },
+  { id: "addresses", label: "Addresses", Icon: FaMapMarkerAlt },
+  { id: "settings", label: "Settings", Icon: FaCog },
 ];
 
 const STATUS_COLORS = {
@@ -65,88 +71,108 @@ const ProfileTab = ({ user, onUpdated }) => {
     setSaving(false);
   };
 
+  const FieldRow = ({ icon: Icon, label, children }) => (
+    <div>
+      <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5 block">{label}</label>
+      <div className="flex items-center gap-3 px-4 py-3 bg-muted/40 dark:bg-zinc-800/50 border border-border/60 rounded-xl">
+        <Icon className="text-primary flex-shrink-0" size={15} />
+        {children}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="max-w-md">
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-20 h-20 rounded-full bg-primary/50 flex items-center justify-center text-white text-3xl font-bold shadow-md">
+    <div className="max-w-lg space-y-6">
+      <div className={`${CARD} p-6 flex items-center gap-5`}>
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-white text-3xl font-extrabold shadow-lg shadow-primary/20 flex-shrink-0">
           {(user?.name || "U").charAt(0).toUpperCase()}
         </div>
-        <div>
-          <h2 className="text-xl font-bold text-foreground">{user?.name}</h2>
-          <p className="text-sm text-muted-foreground">{user?.email}</p>
-          <span className="inline-block mt-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
-            {user?.role === "USER" ? "Customer" : user?.role?.replace("_", " ")}
-          </span>
+        <div className="min-w-0">
+          <h2 className="text-xl font-extrabold text-foreground truncate">{user?.name || "—"}</h2>
+          <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <span className="text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-semibold">
+              {user?.role === "USER" ? "Customer" : user?.role?.replace("_", " ")}
+            </span>
+            {user?.linkedGoogle && (
+              <span className="text-xs inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 px-2.5 py-0.5 rounded-full font-medium">
+                <FaGoogle size={10} /> Google
+              </span>
+            )}
+            {user?.linkedFacebook && (
+              <span className="text-xs inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 px-2.5 py-0.5 rounded-full font-medium">
+                <FaFacebook size={10} /> Facebook
+              </span>
+            )}
+            {user?.hasPassword && (
+              <span className="text-xs inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 px-2.5 py-0.5 rounded-full font-medium">
+                <FaLock size={9} /> Password set
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="space-y-4">
-        {/* Name */}
-        <div>
-          <label className="text-sm font-semibold text-muted-foreground mb-1 block">Full Name</label>
-          {editing ? (
-            <input
-              value={form.name}
-              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground focus:ring-2 focus:ring-primary outline-none"
-            />
-          ) : (
-            <div className="flex items-center gap-2 px-4 py-3 bg-white/80 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-xl">
-              <FaUserCircle className="text-muted-foreground" size={14} />
-              <span className="text-sm text-foreground">{user?.name || "—"}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Email (read-only) */}
-        <div>
-          <label className="text-sm font-semibold text-muted-foreground mb-1 block">Email</label>
-          <div className="flex items-center gap-2 px-3 py-2 bg-card rounded-lg">
-            <FaEnvelope className="text-muted-foreground" size={14} />
-            <span className="text-sm text-muted-foreground">{user?.email}</span>
-          </div>
-        </div>
-
-        {/* Phone */}
-        <div>
-          <label className="text-sm font-semibold text-muted-foreground mb-1 block">Phone</label>
-          {editing ? (
-            <input
-              value={form.phone}
-              onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-              placeholder="+91 XXXXX XXXXX"
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground focus:ring-2 focus:ring-primary outline-none"
-            />
-          ) : (
-            <div className="flex items-center gap-2 px-4 py-3 bg-white/80 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-xl">
-              <FaPhone className="text-muted-foreground" size={14} />
-              <span className="text-sm text-foreground">{user?.phone || "Not set"}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        {editing ? (
-          <div className="flex gap-3 pt-2">
+      <div className={`${CARD} p-6 space-y-4`}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-bold text-foreground">Personal details</h3>
+          {!editing && (
             <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 bg-primary/50 hover:bg-primary-hover text-white rounded-lg font-semibold text-sm transition disabled:opacity-60"
+              onClick={() => setEditing(true)}
+              className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary-hover transition"
             >
-              <FiSave size={14} /> {saving ? "Saving…" : "Save Changes"}
+              <FiEdit2 size={13} /> Edit
             </button>
-            <button onClick={() => { setEditing(false); setForm({ name: user?.name || "", phone: user?.phone || "" }); }}
-              className="flex items-center gap-2 px-5 py-2 border border-border text-muted-foreground rounded-lg font-semibold text-sm hover:bg-muted transition">
-              <FiX size={14} /> Cancel
-            </button>
-          </div>
+          )}
+        </div>
+
+        {editing ? (
+          <>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5 block">Full name</label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                className={INPUT}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5 block">Phone</label>
+              <input
+                value={form.phone}
+                onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                placeholder="+91 XXXXX XXXXX"
+                className={INPUT}
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl font-semibold text-sm transition disabled:opacity-60"
+              >
+                <FiSave size={14} /> {saving ? "Saving…" : "Save changes"}
+              </button>
+              <button
+                onClick={() => { setEditing(false); setForm({ name: user?.name || "", phone: user?.phone || "" }); }}
+                className="flex items-center gap-2 px-5 py-2.5 border border-border text-muted-foreground rounded-xl font-semibold text-sm hover:bg-muted/50 transition"
+              >
+                <FiX size={14} /> Cancel
+              </button>
+            </div>
+          </>
         ) : (
-          <button
-            onClick={() => setEditing(true)}
-            className="flex items-center gap-2 px-5 py-2 border border-primary text-primary rounded-lg font-semibold text-sm hover:bg-primary/5 transition"
-          >
-            <FiEdit2 size={14} /> Edit Profile
-          </button>
+          <>
+            <FieldRow icon={FaUserCircle} label="Full name">
+              <span className="text-sm text-foreground">{user?.name || "—"}</span>
+            </FieldRow>
+            <FieldRow icon={FaEnvelope} label="Email">
+              <span className="text-sm text-foreground truncate">{user?.email}</span>
+            </FieldRow>
+            <FieldRow icon={FaPhone} label="Phone">
+              <span className="text-sm text-foreground">{user?.phone || "Not set"}</span>
+            </FieldRow>
+          </>
         )}
       </div>
     </div>
@@ -179,7 +205,7 @@ const OrdersTab = () => {
     <div className="space-y-3 max-w-2xl">
       {orders.map((order) => (
         <Link to={`/home/orders/${order.id}`} key={order.id}
-          className="block bg-white/80 dark:bg-black/20 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition overflow-hidden"
+          className="block bg-white/90 dark:bg-zinc-900/70 rounded-2xl border border-border/80 shadow-sm hover:shadow-md transition overflow-hidden"
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-3">
@@ -453,10 +479,14 @@ const AddressesTab = () => {
 };
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
-const SettingsTab = ({ onLogout }) => {
+const SettingsTab = ({ user, onUpdated, onLogout }) => {
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [saving, setSaving] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  const hasPassword = Boolean(user?.hasPassword);
+  const canResetByEmail = user?.email && !user.email.endsWith("@facebook.cravon.local");
 
   const toggleTheme = () => {
     const next = !isDark;
@@ -465,68 +495,174 @@ const SettingsTab = ({ onLogout }) => {
     localStorage.setItem("theme", next ? "dark" : "light");
   };
 
-  const handleChangePassword = async (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     if (form.newPassword !== form.confirmPassword) { toast.error("Passwords do not match"); return; }
     const pwErr = validatePassword(form.newPassword);
     if (pwErr) { toast.error(pwErr); return; }
+    if (hasPassword && !form.currentPassword.trim()) {
+      toast.error("Current password is required");
+      return;
+    }
+
     setSaving(true);
     try {
-      await changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
-      toast.success("Password changed successfully!");
+      const payload = hasPassword
+        ? { currentPassword: form.currentPassword, newPassword: form.newPassword }
+        : { newPassword: form.newPassword };
+      await changePassword(payload);
+      toast.success(hasPassword ? "Password changed successfully!" : "Password added! You can now sign in with email too.");
       setForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      onUpdated({ hasPassword: true });
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to change password");
+      toast.error(err?.response?.data?.message || "Failed to update password");
     }
     setSaving(false);
   };
 
+  const handleForgotPassword = async () => {
+    if (!canResetByEmail) {
+      toast.error("Add a real email to your account before resetting password.");
+      return;
+    }
+    setSendingReset(true);
+    try {
+      const res = await forgotPassword({ email: user.email });
+      toast.success(res.data.message || "Check your email for reset instructions.");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Could not send reset email.");
+    }
+    setSendingReset(false);
+  };
+
   return (
-    <div className="max-w-md space-y-8">
+    <div className="max-w-lg space-y-5">
+      {/* Connected accounts */}
+      {(user?.linkedGoogle || user?.linkedFacebook) && (
+        <div className={`${CARD} p-6`}>
+          <h3 className="font-bold text-foreground mb-4 flex items-center gap-2">
+            <FaShieldAlt className="text-primary" size={15} /> Connected accounts
+          </h3>
+          <div className="space-y-2">
+            {user?.linkedGoogle && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-muted/40 dark:bg-zinc-800/50 border border-border/60">
+                <FaGoogle className="text-blue-500" size={16} />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Google</p>
+                  <p className="text-xs text-muted-foreground">Connected</p>
+                </div>
+              </div>
+            )}
+            {user?.linkedFacebook && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-muted/40 dark:bg-zinc-800/50 border border-border/60">
+                <FaFacebook className="text-indigo-500" size={16} />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Facebook</p>
+                  <p className="text-xs text-muted-foreground">Connected</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Password */}
+      <div className={`${CARD} p-6`}>
+        <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
+          <FaLock className="text-primary" size={14} />
+          {hasPassword ? "Change password" : "Add a password"}
+        </h3>
+        <p className="text-sm text-muted-foreground mb-5">
+          {hasPassword
+            ? "Update your password to keep your account secure."
+            : "Set a password so you can also sign in with your email and password."}
+        </p>
+
+        <form onSubmit={handlePasswordSubmit} className="space-y-3">
+          {hasPassword && (
+            <input
+              type="password"
+              placeholder="Current password"
+              value={form.currentPassword}
+              onChange={(e) => setForm((p) => ({ ...p, currentPassword: e.target.value }))}
+              className={INPUT}
+              autoComplete="current-password"
+            />
+          )}
+          <input
+            type="password"
+            placeholder={hasPassword ? "New password" : "Choose a password"}
+            value={form.newPassword}
+            onChange={(e) => setForm((p) => ({ ...p, newPassword: e.target.value }))}
+            className={INPUT}
+            autoComplete="new-password"
+          />
+          <input
+            type="password"
+            placeholder="Confirm password"
+            value={form.confirmPassword}
+            onChange={(e) => setForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+            className={INPUT}
+            autoComplete="new-password"
+          />
+          {!hasPassword && (
+            <p className="text-xs text-muted-foreground px-1">{PASSWORD_HINT}</p>
+          )}
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full bg-primary hover:bg-primary-hover disabled:opacity-60 text-white py-2.5 rounded-xl font-semibold text-sm transition shadow-sm shadow-primary/20"
+          >
+            {saving ? "Saving…" : hasPassword ? "Update password" : "Add password"}
+          </button>
+        </form>
+
+        {hasPassword && (
+          <button
+            type="button"
+            onClick={handleForgotPassword}
+            disabled={sendingReset || !canResetByEmail}
+            className="mt-4 text-sm font-semibold text-primary hover:underline disabled:opacity-50"
+          >
+            {sendingReset ? "Sending reset link…" : "Forgot your current password?"}
+          </button>
+        )}
+      </div>
+
       {/* Appearance */}
-      <div className="bg-white/80 dark:bg-black/20 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+      <div className={`${CARD} p-6`}>
         <h3 className="font-bold text-foreground mb-4">Appearance</h3>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {isDark ? <FaMoon className="text-indigo-400" /> : <FaSun className="text-yellow-400" />}
-            <span className="text-sm text-foreground dark:text-muted-foreground">{isDark ? "Dark Mode" : "Light Mode"}</span>
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isDark ? "bg-indigo-500/20" : "bg-amber-500/20"}`}>
+              {isDark ? <FaMoon className="text-indigo-400" size={16} /> : <FaSun className="text-amber-500" size={16} />}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">{isDark ? "Dark mode" : "Light mode"}</p>
+              <p className="text-xs text-muted-foreground">Toggle theme for the app</p>
+            </div>
           </div>
           <button
+            type="button"
             onClick={toggleTheme}
-            className={`w-12 h-6 rounded-full transition-colors relative ${isDark ? "bg-primary/50" : "bg-muted"}`}
+            aria-label="Toggle theme"
+            className={`w-12 h-7 rounded-full transition-colors relative flex-shrink-0 ${isDark ? "bg-primary" : "bg-muted-foreground/30"}`}
           >
-            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${isDark ? "translate-x-7" : "translate-x-1"}`} />
+            <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${isDark ? "translate-x-6" : "translate-x-1"}`} />
           </button>
         </div>
       </div>
 
-      {/* Change Password */}
-      <div className="bg-white/80 dark:bg-black/20 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-        <h3 className="font-bold text-foreground mb-4 flex items-center gap-2">
-          <FaLock className="text-primary" size={14} /> Change Password
-        </h3>
-        <form onSubmit={handleChangePassword} className="space-y-3">
-          {["currentPassword", "newPassword", "confirmPassword"].map((field) => (
-            <input
-              key={field}
-              type="password"
-              placeholder={field === "currentPassword" ? "Current password" : field === "newPassword" ? "New password (min 8 chars)" : "Confirm new password"}
-              value={form[field]}
-              onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:ring-2 focus:ring-primary outline-none"
-            />
-          ))}
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full bg-primary/50 hover:bg-primary-hover disabled:opacity-60 text-white py-2 rounded-lg font-semibold text-sm transition"
-          >
-            {saving ? "Updating…" : "Update Password"}
-          </button>
-        </form>
+      {/* Logout */}
+      <div className={`${CARD} p-6`}>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition border border-red-200/80 dark:border-red-900/40"
+        >
+          <FaSignOutAlt size={14} /> Log out of this device
+        </button>
       </div>
-
-
     </div>
   );
 };
@@ -554,10 +690,13 @@ const ProfilePage = () => {
   }, []);
 
   const handleUpdated = useCallback((updatedUser) => {
-    setUser(updatedUser);
-    dispatch(setCredentials({ user: updatedUser, accessToken: localStorage.getItem("accessToken") }));
-    const stored = localStorage.getItem("userData");
-    if (stored) localStorage.setItem("userData", JSON.stringify({ ...JSON.parse(stored), ...updatedUser }));
+    setUser((prev) => {
+      const merged = { ...prev, ...updatedUser };
+      dispatch(setCredentials({ user: merged, accessToken: localStorage.getItem("accessToken") }));
+      const stored = localStorage.getItem("userData");
+      if (stored) localStorage.setItem("userData", JSON.stringify({ ...JSON.parse(stored), ...merged }));
+      return merged;
+    });
   }, [dispatch]);
 
   const handleLogout = async () => {
@@ -567,51 +706,50 @@ const ProfilePage = () => {
   };
 
   return (
-    <div className="min-h-screen">
-      <div className="w-full px-6 md:px-8 py-6 md:py-10 flex flex-col md:flex-row gap-6 lg:gap-8">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30 dark:to-zinc-950/50">
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-10 flex flex-col lg:flex-row gap-6 lg:gap-8">
 
-        {/* ── Sidebar Nav ── */}
-        <aside className="w-full md:w-64 flex-shrink-0">
-          <div className="bg-white/60 dark:bg-[#1A1A1A]/60 backdrop-blur-xl rounded-3xl shadow-sm border border-white/60 dark:border-white/5 overflow-hidden">
-            {/* Avatar header */}
-            <div className="bg-gradient-to-br from-[#FF5A5F] to-[#E0484D] px-4 py-6 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-white text-2xl font-extrabold mx-auto mb-2 shadow-sm">
+        <aside className="w-full lg:w-72 flex-shrink-0">
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="bg-gradient-to-br from-primary via-primary to-primary-hover px-5 py-7 text-center">
+              <div className="w-[4.5rem] h-[4.5rem] rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-extrabold mx-auto mb-3 ring-2 ring-white/30 shadow-lg">
                 {(user?.name || "U").charAt(0).toUpperCase()}
               </div>
-              <p className="text-white font-semibold text-sm truncate">{user?.name || "Loading…"}</p>
-              <p className="text-primary/80 text-xs truncate">{user?.email}</p>
+              <p className="text-white font-bold text-sm truncate">{user?.name || "Loading…"}</p>
+              <p className="text-white/75 text-xs truncate mt-0.5">{user?.email}</p>
             </div>
 
-            {/* Tabs */}
-            <nav className="p-2">
-              {TABS.map((tab) => (
+            <nav className="p-2.5">
+              {TABS.map(({ id, label, Icon }) => (
                 <button
-                  key={tab.id}
-                  onClick={() => setTab(tab.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-[14px] font-bold transition-all duration-300 mb-1 ${activeTab === tab.id
-                      ? "bg-[#FF5A5F] text-white shadow-md shadow-[#FF5A5F]/20"
-                      : "text-gray-600 dark:text-gray-400 hover:bg-white/50 dark:hover:bg-white/10"
-                    }`}
+                  key={id}
+                  type="button"
+                  onClick={() => setTab(id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all mb-0.5 ${
+                    activeTab === id
+                      ? "bg-primary text-white shadow-md shadow-primary/25"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60 dark:hover:bg-zinc-800/60"
+                  }`}
                 >
-                  <span>{tab.icon}</span>
-                  {tab.label}
+                  <Icon size={15} className={activeTab === id ? "text-white" : "text-primary"} />
+                  {label}
                 </button>
               ))}
-              <div className="border-t border-border mt-2 pt-2">
+              <div className="border-t border-border/60 mt-2 pt-2">
                 <button
+                  type="button"
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
                 >
-                  <FaSignOutAlt size={13} /> Logout
+                  <FaSignOutAlt size={14} /> Logout
                 </button>
               </div>
             </nav>
           </div>
         </aside>
 
-        {/* ── Content ── */}
-        <main className="flex-1 bg-white/60 dark:bg-[#1A1A1A]/60 backdrop-blur-xl rounded-3xl shadow-sm border border-white/60 dark:border-white/5 p-6 md:p-10 min-h-[500px]">
-          <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-8">
+        <main className={`flex-1 ${CARD} p-6 md:p-8 min-h-[520px]`}>
+          <h1 className="text-2xl font-extrabold text-foreground mb-6 md:mb-8">
             {TABS.find((t) => t.id === activeTab)?.label}
           </h1>
 
@@ -620,7 +758,7 @@ const ProfilePage = () => {
           {activeTab === "favourites" && <FavouritesTab />}
           {activeTab === "reviews" && <ReviewsTab />}
           {activeTab === "addresses" && <AddressesTab />}
-          {activeTab === "settings" && <SettingsTab onLogout={handleLogout} />}
+          {activeTab === "settings" && <SettingsTab user={user} onUpdated={handleUpdated} onLogout={handleLogout} />}
         </main>
       </div>
     </div>

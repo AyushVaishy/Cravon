@@ -6,7 +6,7 @@ import { clearCart, updateQuantity, removeItem } from "../store/cartSlice";
 import { createOrder } from "../services/orderService";
 import { addNotification } from "../store/notificationsSlice";
 import { getAddresses, addAddress as addAddressAPI } from "../services/addressService";
-import { FaShoppingCart, FaUtensils, FaMapMarkerAlt, FaCheckCircle, FaPlus, FaTag } from "react-icons/fa";
+import { FaShoppingCart, FaUtensils, FaMapMarkerAlt, FaCheckCircle, FaPlus, FaTag, FaLock, FaUser } from "react-icons/fa";
 import { Link } from "react-router-dom";
 
 const COUPONS = {
@@ -17,6 +17,7 @@ const COUPONS = {
 
 const CartPage = () => {
   const cartItems = useSelector((store) => store.cart.items);
+  const isAuthenticated = useSelector((store) => store.auth.isAuthenticated) || !!localStorage.getItem("accessToken");
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
@@ -33,6 +34,10 @@ const CartPage = () => {
   const [couponError, setCouponError] = useState("");
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setShowNewForm(false);
+      return;
+    }
     getAddresses()
       .then((res) => {
         const addrs = res.data.addresses || [];
@@ -42,7 +47,14 @@ const CartPage = () => {
         else setShowNewForm(true);
       })
       .catch(() => setShowNewForm(true));
-  }, []);
+  }, [isAuthenticated]);
+
+  const promptSignIn = (intent = "checkout") => {
+    sessionStorage.setItem("auth_return_to", "/home/cart");
+    sessionStorage.setItem("auth_intent", intent);
+    window.dispatchEvent(new Event("openSignIn"));
+    toast("Sign in or create an account to continue", { icon: "🔐" });
+  };
 
   const handleSaveNewAddress = async () => {
     if (!newAddress.street.trim() || !newAddress.city.trim()) {
@@ -112,6 +124,10 @@ const CartPage = () => {
   };
 
   const handlePlaceOrder = async () => {
+    if (!isAuthenticated) {
+      promptSignIn("checkout");
+      return;
+    }
     const deliveryAddr = getDeliveryAddress();
     if (!deliveryAddr) {
       toast.error("Please select or enter a delivery address");
@@ -170,6 +186,34 @@ const CartPage = () => {
         {/* ── Left: Address + Payment ─────────────────────────── */}
         <div className="flex-1 space-y-6">
 
+          {!isAuthenticated ? (
+            <div className="bg-white/90 dark:bg-zinc-900/70 backdrop-blur-xl rounded-3xl shadow-sm border border-border/80 p-8 md:p-10 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
+                <FaLock className="text-primary text-2xl" />
+              </div>
+              <h2 className="text-xl font-extrabold text-foreground mb-2">Almost there!</h2>
+              <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">
+                Your cart is saved. Sign in or create a free account to enter your delivery address and place your order.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
+                <button
+                  type="button"
+                  onClick={() => promptSignIn("checkout")}
+                  className="flex-1 inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white py-3 px-6 rounded-xl font-bold text-sm transition shadow-md shadow-primary/20"
+                >
+                  <FaUser size={14} /> Sign in to checkout
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { sessionStorage.setItem("auth_return_to", "/home/cart"); window.dispatchEvent(new CustomEvent("openSignIn", { detail: { tab: "signup" } })); }}
+                  className="flex-1 py-3 px-6 rounded-xl font-bold text-sm border-2 border-primary text-primary hover:bg-primary/5 transition"
+                >
+                  Create account
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Delivery Address */}
           <div className="bg-white/60 dark:bg-[#1A1A1A]/60 backdrop-blur-xl rounded-3xl shadow-sm border border-white/60 dark:border-white/5 p-6 md:p-8">
             <div className="flex items-center justify-between mb-4">
@@ -343,6 +387,8 @@ const CartPage = () => {
               {placing ? "Placing Order…" : `Place Order · ₹${Math.round(toPay)}`}
             </button>
           </div>
+          </>
+          )}
         </div>
 
         {/* ── Right: Cart Summary ──────────────────────────────── */}
@@ -419,6 +465,16 @@ const CartPage = () => {
             >
               🗑 Clear cart
             </button>
+
+            {!isAuthenticated && (
+              <button
+                type="button"
+                onClick={() => promptSignIn("checkout")}
+                className="mt-4 w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-bold text-sm transition shadow-md shadow-primary/20"
+              >
+                Sign in to checkout · ₹{Math.round(toPay)}
+              </button>
+            )}
           </div>
         </div>
       </div>
