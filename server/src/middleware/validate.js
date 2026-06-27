@@ -60,11 +60,29 @@ const resetPasswordSchema = z.object({
   path: ["confirmPassword"],
 });
 
+const changePasswordSchema = z.object({
+  oldPassword: z.string().optional(),
+  currentPassword: z.string().optional(),
+  newPassword: passwordSchema,
+});
+
+const verifyEmailSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit verification code"),
+});
+
+const resendVerificationSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
 module.exports = {
   validate,
   signupSchema,
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
+  verifyEmailSchema,
+  resendVerificationSchema,
   passwordSchema,
 };

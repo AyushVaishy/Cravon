@@ -28,6 +28,7 @@ enum OrderStatus {
 enum AuthProvider {
   LOCAL
   GOOGLE
+  FACEBOOK
 }
 
 model User {
@@ -35,6 +36,7 @@ model User {
   email         String       @unique
   password      String?
   googleId      String?      @unique
+  facebookId    String?      @unique
   authProvider  AuthProvider @default(LOCAL)
   emailVerified Boolean      @default(false)
   name          String
@@ -50,6 +52,21 @@ model User {
   reviews      Review[]
   restaurants  Restaurant[] @relation("OwnerRestaurants")
   passwordResetTokens PasswordResetToken[]
+  emailVerificationCodes EmailVerificationCode[]
+}
+
+model EmailVerificationCode {
+  id        String    @id @default(uuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model PasswordResetToken {
