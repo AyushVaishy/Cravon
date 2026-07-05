@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { applyFilters, clearFilters, toggleVeg } from "../store/filtersSlice";
@@ -11,11 +12,20 @@ import {
   FaChevronLeft, FaChevronRight, FaLeaf, FaSlidersH,
   FaClock, FaStar, FaHeart, FaRegHeart, FaMapMarkerAlt,
 } from "react-icons/fa";
-import { ShimmerCategories, ShimmerBrands, ShimmerCarousel } from "../components/Shimmer";
+import { ShimmerCategories, ShimmerBrands, ShimmerCarousel, ShimmerGridCards } from "../components/Shimmer";
+import HomeDiscoverSections from "../components/home/HomeDiscoverSections";
+import DashboardFooter from "../components/dashboard/DashboardFooter";
+import PromoBannerCarousel from "../components/home/PromoBannerCarousel";
+import DishCarousel from "../components/home/DishCarousel";
+import CuratedCollections from "../components/home/CuratedCollections";
+import { buildCollections } from "../data/homeFeed";
+import { RestaurantStatusBadges } from "../utils/restaurantDisplay";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const RADIUS = 50;
+import { BROWSE_RADIUS_KM } from "../utils/locationStorage";
+
+const RADIUS = BROWSE_RADIUS_KM;
 const LIMIT  = 20;
 
 const FOOD_CATEGORIES = [
@@ -34,8 +44,6 @@ const FOOD_CATEGORIES = [
 ];
 
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop";
-const OFFER_POOL = [null, null, "20% OFF up to ₹100", "Free Delivery", "50% OFF up to ₹80", null, "30% OFF on first order", null, "Flat ₹50 OFF", null];
-const getOffer   = (id = "") => OFFER_POOL[id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % OFFER_POOL.length];
 
 // ─── useCarousel hook ─────────────────────────────────────────────────────────
 
@@ -155,11 +163,10 @@ const BrandCircle = ({ restaurant }) => {
 const GlassRestaurantCard = ({ resData, wide = false }) => {
   const dispatch = useDispatch();
   const isFav    = useSelector(selectIsFavourite(resData.id));
-  const { id, name, cuisines, avgRating, costForTwo, deliveryTime, imageUrl, isOpen } = resData;
+  const { id, name, cuisines, avgRating, costForTwo, deliveryTime, imageUrl } = resData;
 
   const cuisineList     = Array.isArray(cuisines) ? cuisines : (cuisines || "").split(",").map((c) => c.trim());
   const displayCuisines = cuisineList.slice(0, 2);
-  const offer           = getOffer(id);
 
   const handleFav = (e) => {
     e.preventDefault();
@@ -182,12 +189,7 @@ const GlassRestaurantCard = ({ resData, wide = false }) => {
           onError={(e) => { e.target.src = PLACEHOLDER_IMG; }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-        {isOpen === false && (
-          <span className="absolute top-2 left-2 bg-black/70 text-white text-xs font-semibold px-2 py-0.5 rounded-lg">CLOSED</span>
-        )}
-        {isOpen !== false && offer && (
-          <span className="absolute top-2 left-2 bg-primary/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-lg shadow">🏷 {offer}</span>
-        )}
+        <RestaurantStatusBadges resData={resData} />
         <span className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-medium px-2 py-0.5 rounded-lg">
           🚀 {deliveryTime ?? "30"} min
         </span>
@@ -223,10 +225,9 @@ const GlassRestaurantCard = ({ resData, wide = false }) => {
 const GlassGridCard = ({ resData }) => {
   const dispatch = useDispatch();
   const isFav    = useSelector(selectIsFavourite(resData.id));
-  const { id, name, cuisines, avgRating, costForTwo, deliveryTime, imageUrl, isOpen, address } = resData;
+  const { id, name, cuisines, avgRating, costForTwo, deliveryTime, imageUrl, address } = resData;
 
   const cuisineList = Array.isArray(cuisines) ? cuisines : (cuisines || "").split(",").map((c) => c.trim());
-  const offer       = getOffer(id);
 
   const handleFav = (e) => {
     e.preventDefault();
@@ -245,12 +246,7 @@ const GlassGridCard = ({ resData }) => {
             onError={(e) => { e.target.src = PLACEHOLDER_IMG; }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
-          {isOpen === false && (
-            <span className="absolute top-2 left-2 bg-black/70 text-white text-xs font-semibold px-2 py-0.5 rounded-md">CLOSED</span>
-          )}
-          {isOpen !== false && offer && (
-            <span className="absolute top-2 left-2 bg-primary/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow">🏷 {offer}</span>
-          )}
+          <RestaurantStatusBadges resData={resData} />
           <span className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-medium px-1.5 py-0.5 rounded-md">
             🚀 {deliveryTime ?? "30"} min
           </span>
@@ -293,7 +289,7 @@ const Section = ({ children, className = "" }) => (
 // ─── HomePage ─────────────────────────────────────────────────────────────────
 
 const HomePage = () => {
-  const { location }   = useOutletContext();
+  const { location, setLocation } = useOutletContext();
   const { user }       = useSelector((s) => s.auth);
   const filters        = useSelector((s) => s.filters);
   const recentlyViewed = useSelector(selectRecentlyViewed);
@@ -309,6 +305,10 @@ const HomePage = () => {
   const [error,              setError]              = useState("");
   const [filterModalOpen,    setFilterModalOpen]     = useState(false);
 
+  const loadMoreSentinelRef = useRef(null);
+  const isFetchingRef       = useRef(false);
+  const pageRef             = useRef(1);
+
   const categoryCarousel       = useCarousel();
   const topBrandsCarousel      = useCarousel();
   const topRestaurantsCarousel = useCarousel();
@@ -322,12 +322,16 @@ const HomePage = () => {
 
   useEffect(() => {
     setPage(1);
+    pageRef.current = 1;
     setFetchedRestaurants([]);
     fetchPage(1, true);
   }, [location]); // eslint-disable-line
 
   const fetchPage = async (pageNum, reset = false) => {
-    if (pageNum === 1) setLoading(true); else setLoadingMore(true);
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (pageNum === 1) setLoading(true);
+    else setLoadingMore(true);
     setError("");
     try {
       const { data } = await getRestaurants(location.lat, location.lng, { radius: RADIUS, limit: LIMIT, page: pageNum });
@@ -336,12 +340,36 @@ const HomePage = () => {
       setFetchedRestaurants((prev) => (reset || pageNum === 1 ? restaurants : [...prev, ...restaurants]));
       setTotal(serverTotal);
       setPage(pageNum);
+      pageRef.current = pageNum;
     } catch {
       setError("Failed to load restaurants. Please try again.");
     }
     setLoading(false);
     setLoadingMore(false);
+    isFetchingRef.current = false;
   };
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel) return;
+
+    const scrollRoot = sentinel.closest("main") || null;
+    const hasMorePages = fetchedRestaurants.length < total;
+
+    if (!hasMorePages || loading || loadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting || isFetchingRef.current) return;
+        if (pageRef.current * LIMIT >= total) return;
+        fetchPage(pageRef.current + 1);
+      },
+      { root: scrollRoot, rootMargin: "320px", threshold: 0 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchedRestaurants.length, total, loading, loadingMore]); // eslint-disable-line
 
   // ── Derived data ─────────────────────────────────────────────────────────────
   const topBrands = useMemo(
@@ -351,6 +379,11 @@ const HomePage = () => {
 
   const topRestaurants = useMemo(
     () => [...fetchedRestaurants].filter((r) => r.avgRating).sort((a, b) => parseFloat(b.avgRating) - parseFloat(a.avgRating)).slice(0, 10),
+    [fetchedRestaurants]
+  );
+
+  const curatedCollections = useMemo(
+    () => buildCollections(fetchedRestaurants),
     [fetchedRestaurants]
   );
 
@@ -365,11 +398,7 @@ const HomePage = () => {
   const filteredRestaurants = useMemo(() => {
     let list = [...fetchedRestaurants];
     if (filters.vegOnly) {
-      list = list.filter((r) =>
-        (Array.isArray(r.cuisines) ? r.cuisines : []).some((c) =>
-          c.toLowerCase().includes("veg") || c.toLowerCase().includes("vegetarian")
-        )
-      );
+      list = list.filter((r) => r.isPureVeg === true);
     }
     if (filters.cuisines.length > 0) {
       const sel = new Set(filters.cuisines.map((c) => c.toLowerCase().trim()));
@@ -462,7 +491,14 @@ const HomePage = () => {
   return (
     <div className="dashboard-home pb-8">
 
-      {/* ── 1. WHAT'S ON YOUR MIND ──────────────────────────────── */}
+      {/* ── 0. PROMO BANNERS ─────────────────────────────────────── */}
+      <Section className="pt-6 pb-4">
+        <PromoBannerCarousel />
+      </Section>
+
+      <div className="section-divider" />
+
+      {/* ── 1. WHAT'S ON YOUR MIND (categories) ─────────────────── */}
       <Section>
         <SectionHeader
           title={user ? `${user.name.split(" ")[0]}, what's on your mind? 🤤` : "What's on your mind? 🤤"}
@@ -487,7 +523,16 @@ const HomePage = () => {
 
       <div className="section-divider" />
 
-      {/* ── 2. BEST RESTAURANTS FOR YOU ─────────────────────────── */}
+      {/* ── 1b. DISH CAROUSEL ───────────────────────────────────── */}
+      <Section>
+        <SectionHeader
+          title="Craving something? 🍽️"
+          subtitle="Popular dishes near you — tap to order from the restaurant"
+        />
+        <DishCarousel lat={location.lat} lng={location.lng} />
+      </Section>
+
+      <div className="section-divider" />
       <Section>
         <SectionHeader
           title="Best Restaurants for You 🌟"
@@ -549,6 +594,16 @@ const HomePage = () => {
             <div ref={recentlyViewedCarousel.ref} className="flex gap-4 overflow-x-auto scrollbar-hide pb-3">
               {recentlyViewed.map((r) => <GlassRestaurantCard key={r.id} resData={r} />)}
             </div>
+          </Section>
+        </>
+      )}
+
+      {curatedCollections.length > 0 && (
+        <>
+          <div className="section-divider" />
+          <Section>
+            <SectionHeader title="Curated for you ✨" subtitle="Hand-picked collections near your location" />
+            <CuratedCollections collections={curatedCollections} />
           </Section>
         </>
       )}
@@ -635,27 +690,14 @@ const HomePage = () => {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredRestaurants.map((r) => <GlassGridCard key={r.id} resData={r} />)}
+              {loadingMore && <ShimmerGridCards count={4} />}
+              {hasMore && <div ref={loadMoreSentinelRef} className="col-span-full h-1 w-full" aria-hidden />}
             </div>
-            {hasMore && (
-              <div className="text-center mt-10">
-                <button
-                  onClick={() => fetchPage(page + 1)}
-                  disabled={loadingMore}
-                  className="glass-btn px-8 py-3 rounded-full border border-border text-foreground font-semibold hover:border-primary hover:text-primary transition-all disabled:opacity-50 text-sm"
-                >
-                  {loadingMore ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                      </svg>
-                      Loading…
-                    </span>
-                  ) : (
-                    `Show more · ${total - fetchedRestaurants.length} remaining`
-                  )}
-                </button>
-              </div>
+            {!hasMore && fetchedRestaurants.length > 0 && (
+              <>
+                <HomeDiscoverSections setLocation={setLocation} extraCuisines={allCuisines} />
+                <DashboardFooter />
+              </>
             )}
           </>
         )}

@@ -1,7 +1,7 @@
 # Cravon — Master Feature List (Swiggy / Zomato Parity)
 
-**Purpose:** Single checklist for everything a full-stack food delivery platform should have.  
-**Priority order:** 1) User Dashboard → 2) Restaurant Owner → 3) Super Admin  
+**Purpose:** Single checklist for everything a full-stack food delivery platform should have — user POV roadmap + owner + admin + AI + technical portfolio features.  
+**Priority order:** 1) User Dashboard → 2) Restaurant Owner → 3) Super Admin → 4) AI & Technical  
 **Legend:**
 
 | Symbol | Meaning |
@@ -10,128 +10,145 @@
 | ⚠️ | **Partial / Bug** — started but broken, fake, or incomplete |
 | ❌ | **Not implemented** |
 
-**Last updated:** June 24, 2026 (email/password auth complete — forgot/reset, logout, prod cookies)
+**Last updated:** July 1, 2026 (full user POV roadmap sync)
 
 ---
 
 # PART 1 — USER DASHBOARD (Customer App)
 
 **Route base:** `/home/*`  
-**Overall completion:** ~60% (31 done · 6 partial · 21 not started)
+**Overall completion:** ~52% (see summary at end of Part 1)
 
 ---
 
-## A. Authentication & Account Access
-
-**Section completion:** ~87% (11 done · 2 partial · 2 not started) — email/password channel production-ready
+## A. Authentication & Account
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 1 | Email + password signup | ✅ | `SignInSidebar.js`, `POST /auth/signup`; UI + server password rules aligned (8+ chars, uppercase, number) |
-| 2 | Email + password login | ✅ | JWT access token (15m) + httpOnly refresh cookie (7d) |
-| 3 | Auto login on page refresh (session restore) | ✅ | `localStorage` access token + `GET /auth/me`; axios interceptor refreshes on 401 |
-| 4 | Logout | ✅ | `performLogout()` calls `POST /auth/logout` + clears Redux; `Header.js`, `ProfilePage.js` |
-| 5 | Role-based redirect after login (USER → /home) | ✅ | USER → `/home`, OWNER → `/owner` or `/owner/onboard`, ADMIN → `/admin` |
-| 6 | Protected routes (must login to order) | ✅ | `ProtectedRoute.js`, `RoleProtectedRoute.js` |
-| 7 | Phone number + OTP login | ❌ | No OTP model, SMS provider, routes, or UI tab |
-| 8 | Google OAuth login / signup | ✅ | `GET /auth/google`, callback, `GoogleAuthCallbackPage.js`, account linking by email |
-| 9 | Facebook / Apple social login | ❌ | Facebook button in UI only — no handler; no Apple button |
-| 10 | Forgot password | ✅ | `SignInSidebar` forgot tab → `POST /auth/forgot-password`; rate-limited (5/15min) |
-| 11 | Reset password via email link | ✅ | Professional HTML email via SMTP; `/auth/reset-password?token=` → `ResetPasswordPage.js` |
-| 12 | Email verification on signup | ⚠️ | `emailVerified` in DB; auto-set for Google users only — local signup does not send verification email |
-| 13 | Two-factor authentication (2FA) | ❌ | |
-| 14 | Guest browse (view restaurants without login) | ⚠️ | Marketing pages public; entire `/home/*` requires login |
-| 15 | Sign up as Customer vs Restaurant Owner | ✅ | Role toggle at signup; passed to email signup + Google OAuth `state` |
+| 1 | User registration (email + password signup) | ✅ | Signup → 6-digit email OTP → verify before session; `POST /auth/signup`, `/verify-email`, `/resend-verification` |
+| 2 | Email & password login | ✅ | Blocks unverified local accounts; resends OTP on login attempt |
+| 3 | Google OAuth login / signup | ✅ | `GET /auth/google`, callback, account linking by email |
+| 4 | Facebook social login / signup | ✅ | `GET /auth/facebook`, callback, account linking by email |
+| 5 | Phone OTP login | ❌ | Not started — planned post-v1 |
+| 6 | Forgot password | ✅ | Sign-in sidebar + Profile Settings |
+| 7 | Reset password via email link | ✅ | SendGrid / SMTP; `ResetPasswordPage.js` |
+| 8 | JWT authentication | ✅ | Access token in `localStorage`; axios interceptor |
+| 9 | Refresh token | ✅ | Rotation on 401; `POST /auth/refresh` |
+| 10 | Remember me (extended session) | ✅ | Login checkbox → 30-day refresh cookie vs 7-day default |
+| 11 | Auto login on page refresh (session restore) | ✅ | `GET /auth/me` on app load |
+| 12 | Logout | ✅ | `performLogout()` → `POST /auth/logout` + clears Redux |
+| 13 | Logout from all devices | ✅ | `POST /auth/logout-all` — invalidates all sessions via `refreshTokenVersion` |
+| 14 | Email verification on signup (OTP) | ✅ | 6-digit code; 10 min expiry; branded HTML email |
+| 15 | Role-based redirect after login (USER → /home) | ✅ | USER → `/home`, OWNER → `/owner`, ADMIN → `/admin` |
+| 16 | Protected routes (must login to order) | ✅ | Browse/cart public; checkout prompts sign-in |
+| 17 | Guest browse restaurants without login | ✅ | `/home` public; login only at checkout |
+| 18 | Sign up as Customer vs Restaurant Owner | ✅ | Role toggle on signup + OAuth `state` |
+| 19 | Profile management (view / edit name, phone) | ✅ | Profile page tabs |
+| 20 | Change password | ✅ | Profile Settings; social users can add password |
+| 21 | Upload profile picture | ✅ | Profile tab — image upload → `PUT /auth/me/avatar` (max 10 MB) |
+| 22 | Account settings | ✅ | Settings tab — password, theme, notifications, sessions, delete account |
+| 23 | Notification settings (email / push prefs) | ✅ | Settings → toggles persisted via `PUT /auth/me/notifications` |
+| 24 | Email change | ✅ | Profile → change email with OTP to new address |
+| 25 | Delete my account | ✅ | Settings → password or `DELETE MY ACCOUNT` confirmation |
+| 26 | Guest cart in `localStorage` | ✅ | Persists pre-login cart |
 
-**Also implemented:** refresh token rotation (`POST /auth/refresh`), change password (`PUT /auth/password`), Google ↔ email account linking, production cookie settings (`sameSite: lax` dev / `none`+`secure` prod).
+**Section completion:** 100% (24 done · 0 partial · 1 not started — phone OTP excluded from v1)
 
-### Auth by method (what works today)
+**Also implemented:** social ↔ email account linking, production cookies, SendGrid email, remember-me sessions, logout-all-devices, avatar upload, email change OTP, notification prefs, account deletion.
 
-| Capability | Email + password | Phone + OTP | Google OAuth |
-|------------|------------------|-------------|--------------|
-| Signup | ✅ | ❌ | ✅ |
-| Login | ✅ | ❌ | ✅ |
-| Logout (full server invalidation) | ✅ | — | ✅ |
-| Refresh token / stay logged in | ✅ | — | ✅ |
-| Forgot / reset password | ✅ | — | N/A (can set password via reset email) |
-| Email verification | ❌ | — | ✅ (via Google) |
-| Owner vs Customer role at signup | ✅ | — | ✅ |
+### Auth by method
+
+| Capability | Email + password | Google OAuth | Facebook OAuth | Phone OTP |
+|------------|------------------|--------------|----------------|----------|
+| Signup | ✅ (+ email OTP) | ✅ | ✅ | ❌ |
+| Login | ✅ | ✅ | ✅ | ❌ |
+| Logout / refresh | ✅ | ✅ | ✅ | ❌ |
+| Forgot / reset / change password | ✅ | ✅ (add password) | ✅ (add password) | ❌ |
+| Email verification | ✅ OTP | ✅ (via Google) | ✅ (if email shared) | ❌ |
 
 ### Production deployment checklist (auth)
 
-| Item | Dev (current) | Production (change to) |
-|------|---------------|------------------------|
-| `GOOGLE_CALLBACK_URL` | `http://localhost:5000/api/auth/google/callback` | `https://YOUR-API-DOMAIN/api/auth/google/callback` |
-| Frontend URL (auto) | `http://localhost:3000` via `NODE_ENV=development` | `https://cravon-frontend.onrender.com` via `NODE_ENV=production` |
-| `CLIENT_URL` (optional) | Extra CORS origins only | Extra origins if needed |
-| `NODE_ENV` | `development` | `production` |
-| `JWT_SECRET` / `JWT_REFRESH_SECRET` | dev placeholders | Strong random secrets (32+ chars) |
-| `REACT_APP_API_URL` (client) | `http://localhost:5000/api` | `https://YOUR-API-DOMAIN/api` |
-| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | unset → link logged to console | **Required** for reset emails (Gmail App Password, SendGrid SMTP, etc.) |
-| `SMTP_FROM` | — | `"Cravon" <noreply@yourdomain.com>` |
-| Google Cloud Console | localhost redirect URI | Add production redirect URI |
-| Refresh cookies | `sameSite: lax` on localhost | `sameSite: none` + `secure: true` when API ≠ frontend domain (already in code) |
-
-**Still to build:** #7 phone OTP, #12 email verification for local signup, #13 2FA, #14 guest browse routing.
+| Item | Dev | Production (Render) |
+|------|-----|---------------------|
+| `GOOGLE_CALLBACK_URL` | `http://localhost:5000/api/auth/google/callback` | `https://cravon.onrender.com/api/auth/google/callback` |
+| `FACEBOOK_CALLBACK_URL` | `http://localhost:5000/api/auth/facebook/callback` | `https://cravon.onrender.com/api/auth/facebook/callback` |
+| Email (OTP + reset) | SendGrid or Gmail SMTP | `SENDGRID_API_KEY` + verified `EMAIL_FROM` |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET` | dev placeholders | Strong random secrets |
+| Run migrations | `npx prisma migrate dev` | `npx prisma migrate deploy` |
 
 ---
 
-## B. Location & Serviceability
+## B. Location
+
+**Section completion:** 100% (15 done · 0 partial · 0 not started)
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 16 | Set location via address search (geocoding) | ✅ | Nominatim in `DashboardLayout.js` |
-| 17 | Use current GPS location | ✅ | Browser geolocation |
-| 18 | Persist selected browse location | ✅ | `localStorage` `cravon_location` |
-| 19 | Default location fallback (Bengaluru) | ✅ | |
-| 20 | Location-based restaurant listing (radius) | ✅ | Haversine filter on backend |
-| 21 | "No restaurants in your area" empty state | ✅ | `HomePage.js` |
-| 22 | Recent location searches | ⚠️ | Session only — not persisted across devices |
-| 23 | Saved addresses synced with location panel | ⚠️ | Hardcoded fake addresses in panel; not from API |
-| 24 | Delivery zone / pincode serviceability check | ❌ | Radius only — no polygon zones |
-| 25 | Detect wrong / unserviceable address at checkout | ❌ | |
-| 26 | Multiple cities support | ✅ | Seed data has multiple cities |
+| 27 | Detect current location (GPS) | ✅ | Browser geolocation in `LocationPanel.js` |
+| 28 | Search delivery / browse location | ✅ | Address search via backend geocoding proxy |
+| 29 | Google Maps integration | ✅ | Google Maps JS picker when `GOOGLE_MAPS_API_KEY` set; OpenStreetMap/Leaflet fallback |
+| 30 | Address autocomplete | ✅ | Google Places via server proxy when key set; Nominatim fallback |
+| 31 | Reverse geocoding (lat/lng → address) | ✅ | Backend proxy used on GPS pin |
+| 32 | Persist selected browse location | ✅ | `localStorage` `cravon_location` |
+| 33 | Default location fallback (Bengaluru) | ✅ | |
+| 34 | Recent location searches | ✅ | `cravon_recent_locations` in localStorage |
+| 35 | Location-based restaurant listing (radius) | ✅ | 15 km Haversine on backend + `HomePage` |
+| 36 | Distance calculation (Haversine) | ✅ | Server-side on restaurant queries |
+| 37 | Delivery availability / serviceability check | ✅ | Radius + pincode via `/api/location/serviceability` |
+| 38 | Detect wrong / unserviceable address at checkout | ✅ | Client pre-check + server validation in `createOrder` |
+| 39 | "No restaurants in your area" empty state | ✅ | `HomePage.js` |
+| 40 | Multiple cities support | ✅ | 500 restaurants · 26 cities in seed |
+| 41 | Saved addresses synced with location panel | ✅ | API-backed when logged in |
 
 ---
 
 ## C. Saved Addresses (Delivery)
 
+**Section completion:** 100% (11 done · 0 partial · 0 not started)
+
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 27 | Add delivery address | ✅ | Profile + checkout |
-| 28 | Delete delivery address | ✅ | Profile |
-| 29 | Edit delivery address | ❌ | API exists — no UI |
-| 30 | Set default address | ❌ | API exists — no UI |
-| 31 | Address labels (Home / Work / Other) | ✅ | Label field on create |
-| 32 | Map pin / drag to set location on address | ❌ | |
-| 33 | Geocoded lat/lng on saved address | ⚠️ | Saves `lat: 0, lng: 0` from checkout |
-| 34 | Address used in order (`addressId` in DB) | ⚠️ | Schema has field; always null in practice |
-| 35 | Delivery instructions per order | ✅ | Appended to notes string |
-| 36 | Contactless delivery option | ❌ | |
-| 37 | Alternate phone number for delivery | ❌ | |
+| 42 | Save multiple delivery addresses | ✅ | Profile + checkout (`AddressForm.js`) |
+| 43 | Add delivery address | ✅ | |
+| 44 | Edit delivery address | ✅ | `PUT /addresses/:id` |
+| 45 | Delete delivery address | ✅ | Profile with confirm dialog |
+| 46 | Default address | ✅ | "Make default" on Profile; badge on Cart |
+| 47 | Address labels (Home / Work / Other) | ✅ | One Home + one Work max; Other requires custom name |
+| 48 | Map pin / drag to set location on address | ✅ | "Pin location on map (GPS)" in `AddressForm.js` |
+| 49 | Geocoded lat/lng on saved address | ✅ | Pincode-first geocode + optional GPS lat/lng |
+| 50 | Contact name + phone on address | ✅ | Required on save; passed to delivery partner |
+| 51 | Address used in order (`addressId` in DB) | ✅ | Checkout sends `addressId` |
+| 52 | Saved address selection in location panel | ✅ | Highlights selected address |
 
 ---
 
-## D. Home Feed & Discovery
+## D. Home Page & Discovery
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 38 | Home page with restaurant list | ✅ | `HomePage.js` |
-| 39 | Restaurant cards (image, rating, time, cost for two) | ✅ | `RestaurantCard.js` |
-| 40 | Pagination / "Show more" restaurants | ✅ | Server-side page param |
-| 41 | Top / best rated restaurants section | ✅ | Sorted by `avgRating` |
-| 42 | Recently viewed restaurants | ✅ | Redux — local only |
-| 43 | Food category shortcuts (Pizza, Biryani, etc.) | ✅ | Links to search |
-| 44 | Promotional banners / hero offers | ❌ | |
-| 45 | Curated collections ("Best under ₹200") | ❌ | |
-| 46 | What's on your mind (dish carousel) | ❌ | |
-| 47 | Restaurant offer badges on cards | ⚠️ | Fake hash-based rotating labels |
-| 48 | Pure veg mode (platform-wide toggle) | ⚠️ | Filters cuisine name — not item-level |
-| 49 | Offline detection banner | ✅ | `useOnlineStatus` hook |
-| 50 | Closed restaurant badge on card | ✅ | Shows "Closed" overlay |
-| 51 | "Closing soon" indicator | ✅ | If closing within 60 min |
-| 52 | Dark / light theme | ✅ | Toggle in profile + layout |
-| 53 | Responsive mobile layout | ✅ | Tailwind responsive |
+| 53 | Home page with restaurant list | ✅ | `HomePage.js` |
+| 54 | Personalized homepage | ⚠️ | Location-based only — no ML personalization |
+| 55 | Restaurant recommendations ("Recommended for you") | ❌ | No ML / preference engine |
+| 56 | Trending restaurants | ❌ | No dedicated trending section |
+| 57 | Trending dishes | ✅ | `DishCarousel.js` + `GET /api/discovery/dishes` |
+| 58 | Popular cuisines / categories | ✅ | Food category shortcuts (Pizza, Biryani, etc.) |
+| 59 | Offers banner / promotional hero | ✅ | `PromoBannerCarousel.js` + `GET /api/discovery/banners` |
+| 60 | Festival / seasonal offers | ❌ | Generic banners only |
+| 61 | Curated collections ("Best under ₹200") | ✅ | `CuratedCollections.js` — 5 collection types |
+| 62 | Recently viewed restaurants | ✅ | Redux — local only |
+| 63 | Recently ordered (homepage section) | ❌ | Reorder exists from order history — not on home feed |
+| 64 | Top-rated / best restaurants section | ✅ | Sorted by `avgRating` |
+| 65 | Fast delivery restaurants section | ❌ | Filter exists on search — no home section |
+| 66 | New restaurants section | ❌ | No "new on Cravon" feed |
+| 67 | Pure veg restaurants | ✅ | `Restaurant.isPureVeg` + Pure Veg toggle on home |
+| 68 | Nearby restaurants (distance-sorted) | ✅ | Radius listing + distance on cards |
+| 69 | Open now restaurants | ⚠️ | Closed badge shown — no "Open now" home filter/section |
+| 70 | Featured / promoted restaurants | ❌ | No featured slot on homepage |
+| 71 | Infinite scroll restaurant list | ✅ | IntersectionObserver + shimmer cards |
+| 72 | Restaurant offer badges on cards | ✅ | Real `Restaurant.offerTag` from DB |
+| 73 | Offline detection banner | ✅ | `useOnlineStatus` hook |
+| 74 | Closed restaurant badge on card | ✅ | CLOSED overlay on cards |
+| 75 | "Closing soon" indicator | ✅ | `RestaurantStatusBadges` — within 60 min of closing |
 
 ---
 
@@ -139,19 +156,20 @@
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 54 | Search bar with live suggestions | ✅ | `DashboardTopBar.js` — home page only |
-| 55 | Dedicated search results page | ✅ | `/home/search?q=` |
-| 56 | Search by restaurant name | ✅ | |
-| 57 | Search by cuisine type | ✅ | Backend supports |
-| 58 | Search by city | ✅ | Backend supports |
-| 59 | Search by dish / menu item name | ❌ | |
-| 60 | Search sorted by distance | ❌ | API accepts lat/lng but ignores for sort |
-| 61 | Search filters (rating 4+, fast delivery) | ✅ | Client-side on results page |
-| 62 | Sort (relevance, rating, delivery time, cost) | ✅ | `SearchResultsPage.js` |
-| 63 | Recent searches (persisted) | ❌ | |
-| 64 | Voice search | ❌ | |
-| 65 | Search available on all app pages | ❌ | Top bar only on `/home` |
-| 66 | Trending searches | ❌ | |
+| 76 | Search restaurants by name | ✅ | Backend name match + relevance score |
+| 77 | Search food items / dishes | ✅ | `MenuItem.name` search + dish results section |
+| 78 | Search cuisines | ✅ | Exact + partial cuisine match |
+| 79 | Search by location / city | ✅ | Backend city match |
+| 80 | Instant search (live suggestions) | ✅ | `DashboardTopBar.js` — debounced suggestions |
+| 81 | Auto suggestions | ✅ | Top bar + search assist dropdown |
+| 82 | Voice search | ✅ | Web Speech API — mic in top bar + search page |
+| 83 | Recent searches (persisted) | ✅ | `searchStorage.js` localStorage |
+| 84 | Trending searches | ✅ | `GET /api/restaurants/search/trending` + chips |
+| 85 | Search history page | ⚠️ | Recent searches shown — no full history management UI |
+| 86 | Dedicated search results page | ✅ | `/home/search?q=` |
+| 87 | Search inside restaurant menu | ✅ | Menu page search |
+| 88 | Search sorted by distance | ✅ | "Nearest" sort + API `sort=distance` |
+| 89 | Search available on all app pages | ✅ | Top bar via `DashboardLayout` |
 
 ---
 
@@ -159,300 +177,457 @@
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 67 | Advanced filter modal | ✅ | `FilterModal.js` |
-| 68 | Filter by rating (4+, 4.5+) | ✅ | Client-side |
-| 69 | Filter by delivery time (under 30/45 min) | ✅ | Client-side |
-| 70 | Filter by cost for two | ✅ | Client-side |
-| 71 | Filter by cuisine | ✅ | |
-| 72 | Veg / Non-veg filter (restaurant level) | ⚠️ | Cuisine name hack — not accurate |
-| 73 | Pure veg restaurants only toggle | ⚠️ | Same limitation |
-| 74 | Offers / discounts filter | ❌ | |
-| 75 | Free delivery filter | ❌ | |
-| 76 | Accepts online payment filter | ❌ | |
-| 77 | New restaurants filter | ❌ | |
-| 78 | Server-side filtering (not just loaded page) | ❌ | Filters apply to fetched list only |
-| 79 | Sort by distance | ❌ | |
-| 80 | Sort by popularity / orders count | ❌ | |
+| 90 | Advanced filter modal | ✅ | `FilterModal.js` |
+| 91 | Veg only filter | ⚠️ | Cuisine name hack — not accurate at restaurant level |
+| 92 | Non-veg filter | ⚠️ | Same limitation |
+| 93 | Pure veg restaurants only toggle | ⚠️ | Same limitation |
+| 94 | Open now filter | ❌ | |
+| 95 | Offers / discounts available filter | ❌ | |
+| 96 | Free delivery filter | ❌ | |
+| 97 | Fast delivery filter (under 30/45 min) | ✅ | Client-side on search/home |
+| 98 | Rating filter (4+, 4.5+) | ✅ | Client-side |
+| 99 | Price filter (cost for two) | ✅ | Client-side |
+| 100 | Cuisine filter | ✅ | |
+| 101 | Distance filter | ❌ | Distance shown — no max-distance filter |
+| 102 | Delivery time filter | ✅ | Under 30/45 min |
+| 103 | Sort by popularity / orders count | ❌ | |
+| 104 | Sort by rating | ✅ | |
+| 105 | Sort by delivery time | ✅ | |
+| 106 | Sort by price (cost for two) | ✅ | |
+| 107 | Sort by distance | ⚠️ | Works on search page — not on home infinite scroll |
+| 108 | Accepts online payment filter | ❌ | |
+| 109 | New restaurants filter | ❌ | |
+| 110 | Server-side filtering (full dataset) | ❌ | Filters apply to fetched page only |
 
 ---
 
-## G. Favourites & Personalization
+## G. Restaurant Listing (Cards)
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 81 | Favourite / heart restaurant on card | ✅ | |
-| 82 | Favourites list in profile | ✅ | |
-| 83 | Favourites synced to account (server) | ❌ | localStorage only |
-| 84 | Favourites persist across devices | ❌ | |
-| 85 | Order again / reorder from history | ✅ | Rebuilds cart |
-| 86 | Recommended for you (ML/personalized) | ❌ | |
-| 87 | Browsing history | ⚠️ | Recently viewed only — local |
+| 111 | Restaurant cover / hero image on card | ✅ | `RestaurantCard.js` |
+| 112 | Restaurant logo | ⚠️ | Uses cover image — no separate logo field on card |
+| 113 | Rating display | ✅ | |
+| 114 | Reviews count | ✅ | |
+| 115 | Cuisine type(s) | ✅ | |
+| 116 | Average price (cost for two) | ✅ | |
+| 117 | Delivery fee on card | ⚠️ | Flat platform fee logic — not per-restaurant on card |
+| 118 | Delivery time estimate | ✅ | |
+| 119 | Distance from user | ✅ | When location set |
+| 120 | Open / Closed status badge | ✅ | |
+| 121 | Restaurant tags (pure veg, etc.) | ✅ | Offer tag + status badges |
+| 122 | Promoted / featured badge | ❌ | |
+| 123 | Favorite / heart button on card | ✅ | |
 
 ---
 
-## H. Restaurant & Menu Page
+## H. Restaurant & Menu Details
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 88 | Restaurant detail page | ✅ | `/home/restaurants/:id` |
-| 89 | Restaurant hero image + info | ✅ | |
-| 90 | Cuisines, rating, delivery time, cost for two | ✅ | |
-| 91 | Restaurant address / area shown | ✅ | |
-| 92 | Opening hours display | ⚠️ | Data in DB — limited UI |
-| 93 | FSSAI license number display | ⚠️ | Field exists — rarely shown |
-| 94 | Restaurant phone number | ⚠️ | Field exists — limited display |
-| 95 | Menu grouped by category (accordion) | ✅ | `RestaurantCategory.js` |
-| 96 | Menu item image | ✅ | URL-based |
-| 97 | Menu item description | ✅ | |
-| 98 | Veg / Non-veg icon on each item | ✅ | `isVeg` field |
-| 99 | Item-level veg filter on menu page | ✅ | Toggle on menu |
-| 100 | Menu search within restaurant | ✅ | |
-| 101 | Item in stock / out of stock (`isAvailable`) | ⚠️ | DB field exists; UI may still show add button |
-| 102 | Block add-to-cart for out-of-stock item | ❌ | Not enforced on frontend |
-| 103 | Bestseller / recommended badge on item | ⚠️ | Fake deterministic hash |
-| 104 | Item customizations (size, spice level) | ⚠️ | Modal UI exists — **not applied to cart** |
-| 105 | Add-ons / extras (cheese, toppings) | ⚠️ | Modal UI — **not applied to cart** |
-| 106 | Item variants (Half / Full plate) | ⚠️ | Part of customization modal — broken |
-| 107 | Combo meals / meal boxes | ❌ | |
-| 108 | Item nutritional info / allergens | ❌ | |
-| 109 | Share restaurant link | ❌ | |
-| 110 | Report restaurant / issue | ❌ | |
-| 111 | Block ordering when restaurant closed | ❌ | Badge shown but ordering not blocked |
-| 112 | Reviews section on restaurant page | ✅ | If reviews loaded in API |
-| 113 | Rating breakdown (5-star distribution) | ✅ | |
-| 114 | Photos in reviews | ❌ | |
+| 124 | Restaurant detail page | ✅ | `/home/restaurants/:id` |
+| 125 | Restaurant description | ✅ | |
+| 126 | Opening hours display | ⚠️ | Data in DB — limited UI |
+| 127 | Restaurant address / area | ✅ | |
+| 128 | Restaurant contact / phone | ⚠️ | Field exists — limited display |
+| 129 | Restaurant images (hero + gallery) | ⚠️ | Hero image — no multi-image gallery |
+| 130 | FSSAI license number display | ⚠️ | Field exists — rarely shown |
+| 131 | Menu grouped by category (accordion) | ✅ | `RestaurantCategory.js` |
+| 132 | Recommended section on menu | ❌ | |
+| 133 | Bestseller section on menu | ⚠️ | Fake deterministic hash badge per item |
+| 134 | Offers section on restaurant page | ❌ | Offer tag on card only |
+| 135 | Search in menu | ✅ | |
+| 136 | Restaurant reviews list | ✅ | If reviews loaded in API |
+| 137 | Restaurant ratings breakdown (5-star distribution) | ✅ | |
+| 138 | Photos by users in reviews | ❌ | |
+| 139 | Similar restaurants | ❌ | |
+| 140 | Share restaurant link | ❌ | |
+| 141 | Report restaurant / issue | ❌ | |
+| 142 | Block ordering when restaurant closed | ❌ | Badge shown but ordering not blocked |
 
 ---
 
-## I. Cart
+## I. Food Item (Menu Item)
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 115 | Add item to cart | ✅ | Redux `cartSlice` |
-| 116 | Increase / decrease quantity | ✅ | |
-| 117 | Remove item from cart | ✅ | |
-| 118 | Single-restaurant cart (lock) | ✅ | Clears on restaurant switch |
-| 119 | Floating cart bar on menu page | ✅ | |
-| 120 | Cart page with item list | ✅ | `/home/cart` |
-| 121 | Cart item customization summary shown | ❌ | Customizations not stored |
-| 122 | Cart persists on page refresh | ❌ | Redux only — lost on reload |
-| 123 | Server-side cart sync (`/api/cart`) | ❌ | API exists — client not wired |
-| 124 | Cart count badge in sidebar | ✅ | |
-| 125 | Cross-restaurant warning before switch | ✅ | Toast on switch |
-| 126 | Minimum order value enforcement | ❌ | |
-| 127 | Maximum item quantity limit | ❌ | |
-| 128 | Save cart for later | ❌ | |
+| 143 | Food item image | ✅ | URL-based |
+| 144 | Name & description | ✅ | |
+| 145 | Price | ✅ | |
+| 146 | Discount / offer price | ❌ | Single price only |
+| 147 | Veg / Non-veg indicator | ✅ | `isVeg` field + icon |
+| 148 | Bestseller badge | ⚠️ | Fake deterministic hash |
+| 149 | Item rating | ❌ | Restaurant-level only |
+| 150 | Preparation time | ❌ | |
+| 151 | Calories | ❌ | |
+| 152 | Nutrition info | ❌ | |
+| 153 | Ingredients list | ❌ | |
+| 154 | Allergens info | ❌ | |
+| 155 | Customizations (size, spice level) | ⚠️ | Modal UI — **not applied to cart** |
+| 156 | Add-ons / extras (cheese, toppings) | ⚠️ | Modal UI — **not applied to cart** |
+| 157 | Multiple sizes / variants (Half / Full) | ⚠️ | Part of customization modal — broken |
+| 158 | Quantity selector | ✅ | Add to cart with qty |
+| 159 | Cooking instructions per item | ⚠️ | Order-level notes only — not per item |
+| 160 | Favorite / save food item | ❌ | Restaurant favourites only |
+| 161 | Item in stock / out of stock (`isAvailable`) | ⚠️ | DB field exists; UI may still show add button |
+| 162 | Block add-to-cart for out-of-stock item | ❌ | Not enforced on frontend |
+| 163 | Combo meals / meal boxes | ❌ | |
+| 164 | Share food item link | ❌ | |
 
 ---
 
-## J. Group Ordering
+## J. Wishlist & Favourites
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 129 | Create group order / share link | ❌ | Marketing page says "Coming Soon" |
-| 130 | Join group order via link | ❌ | |
-| 131 | Multiple users add to same cart | ❌ | |
-| 132 | Group order host pays or split bill | ❌ | |
-| 133 | Real-time sync of group cart | ❌ | |
+| 165 | Favorite restaurants (heart on card) | ✅ | |
+| 166 | Favourites list in profile | ✅ | |
+| 167 | Favorite food items | ❌ | |
+| 168 | Saved restaurants (server sync) | ❌ | localStorage only |
+| 169 | Saved dishes (server sync) | ❌ | |
+| 170 | Favourites persist across devices | ❌ | |
+| 171 | Browsing history | ⚠️ | Recently viewed only — local |
 
 ---
 
-## K. Checkout & Bill
+## K. Cart
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 134 | Checkout / cart summary page | ✅ | `CartPage.js` |
-| 135 | Item total calculation | ✅ | |
-| 136 | Delivery fee line item | ✅ | Flat fee logic |
-| 137 | GST / taxes line item | ✅ | Client calculated |
-| 138 | Packaging fee | ❌ | |
-| 139 | Platform fee / surge fee | ❌ | |
-| 140 | Tip for delivery partner | ❌ | |
-| 141 | Bill breakdown transparent total | ✅ | |
-| 142 | Apply coupon / promo code | ⚠️ | **Client-only — server ignores discount** |
-| 143 | Auto-applied offers | ❌ | |
-| 144 | Free delivery coupon | ⚠️ | `FREEDEL` client-only |
-| 145 | Bank / card offer at checkout | ❌ | |
-| 146 | Select delivery address at checkout | ✅ | |
-| 147 | Add new address at checkout | ✅ | |
-| 148 | Cooking / delivery instructions field | ✅ | |
-| 149 | Schedule order for later (date + time slot) | ❌ | |
-| 150 | Pickup / takeaway mode (no delivery) | ❌ | |
-| 151 | Contactless delivery toggle | ❌ | |
-| 152 | Order summary review before pay | ✅ | |
-| 153 | Place order button | ✅ | |
+| 172 | Add item to cart | ✅ | Redux `cartSlice` |
+| 173 | Update quantity (increase / decrease) | ✅ | |
+| 174 | Remove item from cart | ✅ | |
+| 175 | Clear cart | ⚠️ | Remove items one-by-one — no "clear all" button |
+| 176 | Single-restaurant cart (lock) | ✅ | Clears on restaurant switch |
+| 177 | Restaurant switching warning | ✅ | Toast on switch |
+| 178 | Cart persistence on page refresh | ❌ | Redux only — lost on reload |
+| 179 | Server-side cart sync (`/api/cart`) | ❌ | API exists — client not wired |
+| 180 | Offline cart (guest localStorage) | ✅ | Guest cart before login |
+| 181 | Floating cart bar on menu page | ✅ | |
+| 182 | Cart page with item list | ✅ | `/home/cart` |
+| 183 | Cart count badge in sidebar | ✅ | |
+| 184 | Cart item customization summary | ❌ | Customizations not stored |
+| 185 | Coupon apply | ⚠️ | **Client-only — server ignores discount** |
+| 186 | Coupon remove | ⚠️ | Client-side only |
+| 187 | Delivery instructions | ✅ | Cooking instructions → order `notes` |
+| 188 | Restaurant instructions | ❌ | No separate restaurant note field |
+| 189 | Packaging fee in bill | ❌ | |
+| 190 | Platform fee in bill | ❌ | |
+| 191 | Delivery fee in bill | ✅ | Flat fee logic |
+| 192 | GST / taxes line item | ✅ | Client calculated |
+| 193 | Tip delivery partner | ❌ | |
+| 194 | Price breakdown / bill transparency | ✅ | |
+| 195 | Total payable | ✅ | |
+| 196 | Minimum order value enforcement | ❌ | |
+| 197 | Maximum item quantity limit | ❌ | |
+| 198 | Save cart for later | ❌ | |
+| 199 | Contactless delivery option | ✅ | Checkbox on Cart → `Order.contactless` |
+| 200 | Alternate phone for delivery | ✅ | Optional alt phone on Cart |
 
 ---
 
-## L. Payments
+## L. Offers & Coupons
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 154 | Cash on Delivery (COD) | ⚠️ | Label only — no payment method field |
-| 155 | UPI (GPay, PhonePe, Paytm) | ❌ | |
-| 156 | Credit / debit card | ❌ | |
-| 157 | Net banking | ❌ | |
-| 158 | Wallets (Paytm, Amazon Pay) | ❌ | |
-| 159 | Razorpay / Stripe integration | ❌ | Planned Week 2 |
-| 160 | Pay on delivery vs pay now toggle | ❌ | |
-| 161 | Saved payment methods | ❌ | |
-| 162 | Cravon Wallet / platform balance | ❌ | FAQ text only |
-| 163 | Sodexo / meal card | ❌ | |
-| 164 | Payment failure handling + retry | ❌ | |
-| 165 | Payment receipt / invoice | ❌ | |
-| 166 | Refund to original payment method | ❌ | |
-| 167 | Refund to wallet | ❌ | |
-| 168 | Partial payment (wallet + card) | ❌ | |
+| 201 | Coupon listing / browse offers page | ❌ | Codes entered at checkout only |
+| 202 | Restaurant-specific coupons | ❌ | |
+| 203 | Platform coupons | ⚠️ | `WELCOME50`, `CRAVON20`, `FREEDEL` — client fake |
+| 204 | First order offers | ⚠️ | `WELCOME50` — client only |
+| 205 | Cashback offers | ❌ | |
+| 206 | Free delivery offers | ⚠️ | `FREEDEL` — client only |
+| 207 | Coupon validation (server-side) | ❌ | Week 2 planned |
+| 208 | Auto-apply best coupon | ❌ | |
+| 209 | Bank / card cashback offers | ❌ | |
+| 210 | Referral program (invite friend) | ❌ | FAQ text only |
+| 211 | Referral reward coupon | ❌ | |
+| 212 | Cravon One / membership subscription | ❌ | FAQ text only |
+| 213 | Loyalty points / rewards | ❌ | |
+| 214 | Cashback to wallet | ❌ | |
 
 ---
 
-## M. Orders — Placement & History
+## M. Checkout
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 169 | Place order API | ✅ | `POST /api/orders` |
-| 170 | Price snapshot at order time | ✅ | `OrderItem.priceAtTime` |
-| 171 | Order confirmation screen / toast | ✅ | |
-| 172 | Order history list | ✅ | `/home/orders` + profile tab |
-| 173 | Order detail page | ✅ | `/home/orders/:id` |
-| 174 | Order ID / order number shown | ✅ | |
-| 175 | Order items list on detail | ✅ | |
-| 176 | Order status shown (PLACED → DELIVERED) | ✅ | |
-| 177 | Active orders vs past orders tabs | ❌ | Single list |
-| 178 | Pagination on order history | ✅ | 5 per page |
-| 179 | Cancel order (early status) | ✅ | PLACED / CONFIRMED |
-| 180 | Cancellation reason selection | ❌ | |
-| 181 | Cancellation fee logic | ❌ | |
-| 182 | Reorder (repeat past order) | ✅ | |
-| 183 | Download invoice / receipt PDF | ❌ | |
-| 184 | Order help / "issue with this order" | ❌ | |
-| 185 | Orders link in main sidebar | ❌ | Only via profile or URL |
-| 186 | Email / SMS order confirmation | ❌ | |
+| 215 | Checkout / cart summary page | ✅ | `CartPage.js` |
+| 216 | Address selection at checkout | ✅ | |
+| 217 | Add new address at checkout | ✅ | |
+| 218 | Payment method selection | ❌ | COD implied — no method picker |
+| 219 | Order summary review | ✅ | |
+| 220 | Estimated delivery time | ⚠️ | Static estimate — not dynamic ETA |
+| 221 | Place order | ✅ | `POST /api/orders` |
+| 222 | Schedule order for later (date + time slot) | ❌ | |
+| 223 | Pickup / takeaway mode (no delivery) | ❌ | |
+| 224 | Cooking / delivery instructions field | ✅ | |
 
 ---
 
-## N. Live Order Tracking & Delivery
+## N. Payments
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 187 | Order status stepper UI | ✅ | Visual pipeline |
-| 188 | Live status polling | ✅ | 8-second interval |
-| 189 | Real-time push (WebSocket / SSE) | ❌ | Planned Week 3 |
-| 190 | ETA countdown timer | ⚠️ | Fixed 2 min from order time — fake |
-| 191 | Live map with delivery route | ⚠️ | `DeliveryMap.js` — simulated offset |
-| 192 | Delivery partner name + photo | ⚠️ | Hardcoded "Raju Kumar" |
-| 193 | Delivery partner phone / call button | ❌ | Button non-functional |
-| 194 | Call restaurant button | ❌ | |
-| 195 | Real rider GPS tracking | ❌ | Will be simulated in v0.4 |
-| 196 | Order auto-progresses via timer | ⚠️ | `setTimeout` in backend — demo only |
-| 197 | Share live tracking link | ❌ | |
-| 198 | Delivery partner rating after delivery | ❌ | |
+| 225 | Cash on Delivery (COD) | ⚠️ | Label only — no payment method field in DB |
+| 226 | UPI (GPay, PhonePe, Paytm) | ❌ | |
+| 227 | Credit card | ❌ | |
+| 228 | Debit card | ❌ | |
+| 229 | Net Banking | ❌ | |
+| 230 | Wallet (Paytm, Amazon Pay, Cravon Wallet) | ❌ | FAQ text only for platform wallet |
+| 231 | Razorpay / Stripe integration | ❌ | Planned Week 2 |
+| 232 | Pay on delivery vs pay now toggle | ❌ | |
+| 233 | Saved payment methods | ❌ | |
+| 234 | Sodexo / meal card | ❌ | |
+| 235 | Payment failure handling + retry | ❌ | |
+| 236 | Payment receipt / invoice | ❌ | |
+| 237 | Refund to original payment method | ❌ | |
+| 238 | Refund to wallet | ❌ | |
+| 239 | Partial payment (wallet + card) | ❌ | |
 
 ---
 
-## O. Reviews & Ratings
+## O. Order Tracking (Live)
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 199 | View restaurant reviews | ✅ | On menu page |
-| 200 | Submit review after delivery | ✅ | From order detail page |
-| 201 | Star rating 1–5 | ✅ | |
-| 202 | Written review comment | ✅ | |
-| 203 | View my reviews in profile | ✅ | |
-| 204 | One review per restaurant per user | ✅ | DB unique constraint |
-| 205 | Require delivered order before review | ⚠️ | **Bug — weaker route wired** |
-| 206 | Edit my review | ❌ | |
-| 207 | Delete my review | ❌ | API exists — no UI |
-| 208 | Rate individual food items | ❌ | |
-| 209 | Upload photo with review | ❌ | |
-| 210 | Helpful votes on reviews | ❌ | |
-| 211 | Report inappropriate review | ❌ | |
+| 240 | Order placed status | ✅ | PLACED |
+| 241 | Restaurant accepted (confirmed) | ✅ | CONFIRMED |
+| 242 | Preparing status | ✅ | PREPARING |
+| 243 | Ready for pickup status | ⚠️ | Not a distinct step in UI pipeline |
+| 244 | Picked up status | ⚠️ | Merged into out-for-delivery flow |
+| 245 | Out for delivery status | ✅ | |
+| 246 | Delivered status | ✅ | |
+| 247 | Cancelled status | ✅ | |
+| 248 | Order status stepper UI | ✅ | Visual pipeline |
+| 249 | Live tracking map | ⚠️ | `DeliveryMap.js` — simulated offset |
+| 250 | ETA countdown / updates | ⚠️ | Fixed 2 min from order time — fake |
+| 251 | Delivery partner details (name, photo) | ⚠️ | Hardcoded "Raju Kumar" |
+| 252 | Restaurant contact on tracking | ❌ | |
+| 253 | Call delivery partner button | ❌ | Button non-functional |
+| 254 | Call restaurant button | ❌ | |
+| 255 | Real-time status updates (WebSockets / SSE) | ❌ | Polling only — 8s interval |
+| 256 | Real rider GPS tracking | ❌ | Simulated in v0.4 |
+| 257 | Order auto-progresses via timer | ⚠️ | `setTimeout` in backend — demo only |
+| 258 | Share live tracking link | ❌ | |
+| 259 | Delivery partner rating after delivery | ❌ | |
 
 ---
 
-## P. Profile & Settings
+## P. Orders (History & Management)
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 212 | View profile (name, email, phone) | ✅ | |
-| 213 | Edit name and phone | ✅ | |
-| 214 | Email change | ❌ | Read-only |
-| 215 | Change password | ✅ | Settings tab |
-| 216 | Profile avatar / photo upload | ❌ | |
-| 217 | Dark / light mode toggle | ✅ | |
-| 218 | Notification preferences (email/push) | ❌ | |
-| 219 | Language selection (Hindi, etc.) | ❌ | |
-| 220 | Delete my account | ❌ | |
-| 221 | Profile tabs (orders, favourites, addresses, reviews, settings) | ✅ | |
-| 222 | Logout | ⚠️ | Does not invalidate refresh token on server |
+| 260 | Place order API | ✅ | `POST /api/orders` |
+| 261 | Price snapshot at order time | ✅ | `OrderItem.priceAtTime` |
+| 262 | Order confirmation screen / toast | ✅ | |
+| 263 | Active orders tab | ❌ | Single combined list |
+| 264 | Previous / past orders tab | ❌ | Single combined list |
+| 265 | Order history list | ✅ | `/home/orders` + profile tab |
+| 266 | Order detail page | ✅ | `/home/orders/:id` |
+| 267 | Order ID / order number | ✅ | |
+| 268 | Order items list on detail | ✅ | |
+| 269 | Order status display | ✅ | |
+| 270 | Pagination on order history | ✅ | 5 per page |
+| 271 | Cancel order (early status) | ✅ | PLACED / CONFIRMED |
+| 272 | Cancellation reason selection | ❌ | |
+| 273 | Cancellation fee logic | ❌ | |
+| 274 | Reorder (repeat past order) | ✅ | Rebuilds cart |
+| 275 | Download invoice / receipt PDF | ❌ | |
+| 276 | Refund status on order | ❌ | |
+| 277 | Return support (if applicable) | ❌ | |
+| 278 | Order help / "issue with this order" | ❌ | |
+| 279 | Orders link in main sidebar | ❌ | Only via profile or URL |
+| 280 | Email / SMS order confirmation | ❌ | |
 
 ---
 
-## Q. Notifications
+## Q. Reviews & Ratings
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 223 | In-app notification store (Redux) | ✅ | Events added on order |
-| 224 | Notification bell icon in header | ⚠️ | Visible — **click does nothing** |
-| 225 | Notification dropdown list | ❌ | Exists in unused `Header.js` |
-| 226 | Unread notification count | ❌ | |
-| 227 | Mark notification as read | ❌ | |
-| 228 | Notifications persist after refresh | ❌ | In-memory only |
-| 229 | Push notifications (browser / mobile) | ❌ | |
-| 230 | SMS order updates | ❌ | |
-| 231 | Email notifications | ❌ | |
-| 232 | WhatsApp order updates | ❌ | |
+| 281 | Restaurant rating (view) | ✅ | On menu page |
+| 282 | Submit restaurant review after delivery | ✅ | From order detail page |
+| 283 | Star rating 1–5 | ✅ | |
+| 284 | Text review / comment | ✅ | |
+| 285 | Food item rating | ❌ | Restaurant-level only |
+| 286 | Delivery rating | ❌ | |
+| 287 | Upload food photos with review | ❌ | |
+| 288 | View my reviews in profile | ✅ | |
+| 289 | Edit my review | ❌ | |
+| 290 | Delete my review | ❌ | API exists — no UI |
+| 291 | One review per restaurant per user | ✅ | DB unique constraint |
+| 292 | Require delivered order before review | ⚠️ | **Bug — weaker route wired** |
+| 293 | Helpful votes on reviews | ❌ | |
+| 294 | Report inappropriate review | ❌ | |
 
 ---
 
-## R. Offers, Coupons & Loyalty
+## R. Profile & User Dashboard
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 233 | Apply coupon at checkout | ⚠️ | Client-side codes only |
-| 234 | Server-validated coupons | ❌ | Week 2 |
-| 235 | First order discount | ⚠️ | `WELCOME50` — client fake |
-| 236 | Percentage off coupon | ⚠️ | `CRAVON20` — client fake |
-| 237 | Free delivery coupon | ⚠️ | `FREEDEL` — client fake |
-| 238 | Restaurant-specific offers | ❌ | |
-| 239 | Bank / card cashback offers | ❌ | |
-| 240 | Referral program (invite friend) | ❌ | FAQ text only |
-| 241 | Referral reward coupon | ❌ | |
-| 242 | Cravon One / membership subscription | ❌ | FAQ text only |
-| 243 | Loyalty points / rewards | ❌ | |
-| 244 | Cashback to wallet | ❌ | |
+| 295 | User dashboard / profile hub | ✅ | `/home/profile` |
+| 296 | Profile tab (name, email, phone) | ✅ | |
+| 297 | Saved addresses tab | ✅ | |
+| 298 | Wishlist / favourites tab | ✅ | |
+| 299 | Order history tab | ✅ | |
+| 300 | Wallet tab | ❌ | |
+| 301 | Coupons tab | ❌ | |
+| 302 | Reviews tab | ✅ | |
+| 303 | Notifications tab / center | ❌ | Bell icon only |
+| 304 | Settings tab | ✅ | Password + theme |
+| 305 | Dark / light mode toggle | ✅ | Profile + layout |
+| 306 | Language selection (Hindi, etc.) | ❌ | |
+| 307 | Logout from profile | ⚠️ | Does not invalidate all refresh tokens server-side |
 
 ---
 
-## S. Help & Support
+## S. Notifications
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 245 | Help / FAQ page | ✅ | `HelpPage.js` |
-| 246 | Searchable FAQ | ✅ | |
-| 247 | Accurate FAQ content (Cravon-specific) | ⚠️ | **Swiggy copy-paste** in `constants.js` |
-| 248 | In-app contact form | ✅ | Formspree on `ContactPage.js` |
-| 249 | Live chat support | ❌ | Referenced in FAQ — not wired |
-| 250 | Call customer care | ❌ | |
-| 251 | Chat support for specific order | ❌ | |
-| 252 | Raise ticket / track complaint | ❌ | |
+| 308 | Push notifications (browser / mobile) | ❌ | |
+| 309 | Email notifications | ❌ | OTP/reset only — no order emails |
+| 310 | In-app notification store (Redux) | ✅ | Events added on order |
+| 311 | Notification bell icon in header | ⚠️ | Visible — **click does nothing** |
+| 312 | Notification dropdown list | ❌ | Exists in unused `Header.js` |
+| 313 | Unread notification count | ❌ | |
+| 314 | Mark notification as read | ❌ | |
+| 315 | Notifications persist after refresh | ❌ | In-memory only |
+| 316 | Order update notifications | ⚠️ | In-app Redux only |
+| 317 | Offers / coupon notifications | ❌ | |
+| 318 | Refund update notifications | ❌ | |
+| 319 | Promotional notifications | ❌ | |
+| 320 | SMS order updates | ❌ | |
+| 321 | WhatsApp order updates | ❌ | |
 
 ---
 
-## T. Additional Swiggy/Zomato Features (User)
+## T. Help & Support
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 253 | Instamart / grocery ordering | ❌ | Out of scope |
-| 254 | Dineout / table booking | ❌ | Out of scope |
-| 255 | Genie / pick & drop | ❌ | Out of scope |
-| 256 | Alcohol delivery | ❌ | Out of scope |
-| 257 | Corporate / bulk ordering | ❌ | |
-| 258 | Gift cards | ❌ | |
-| 259 | Food subscription / tiffin plan | ❌ | |
-| 260 | PWA (installable app) | ❌ | |
-| 261 | Native iOS / Android app | ❌ | |
-| 262 | Share app / refer via WhatsApp | ❌ | |
+| 322 | FAQ / help center | ✅ | `HelpPage.js` |
+| 323 | Searchable FAQ | ✅ | |
+| 324 | Accurate Cravon-specific FAQ content | ⚠️ | **Swiggy copy-paste** in `constants.js` |
+| 325 | Live chat support | ❌ | Referenced in FAQ — not wired |
+| 326 | Report issue (general) | ⚠️ | Contact form only — no order-linked flow |
+| 327 | Report missing item | ❌ | |
+| 328 | Report wrong order | ❌ | |
+| 329 | Report late delivery | ❌ | |
+| 330 | Refund request flow | ❌ | |
+| 331 | Contact support (in-app form) | ✅ | Formspree on `ContactPage.js` |
+| 332 | Raise ticket / track complaint | ❌ | |
+| 333 | Call customer care | ❌ | |
+| 334 | Chat support for specific order | ❌ | |
+
+---
+
+## U. Advanced Group Ordering
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 335 | Create group order | ❌ | Marketing page says "Coming Soon" |
+| 336 | Share invite link | ❌ | |
+| 337 | Join group using link | ❌ | |
+| 338 | Join group using QR code | ❌ | |
+| 339 | Real-time member list | ❌ | |
+| 340 | Real-time shared cart | ❌ | |
+| 341 | Individual carts merged into group cart | ❌ | |
+| 342 | Show who added each item | ❌ | |
+| 343 | Item ownership per member | ❌ | |
+| 344 | Individual notes per member | ❌ | |
+| 345 | Individual customizations per member | ❌ | |
+| 346 | Group chat | ❌ | |
+| 347 | Vote on restaurant | ❌ | |
+| 348 | Vote on dishes | ❌ | |
+| 349 | Budget limit per member | ❌ | |
+| 350 | Total group budget cap | ❌ | |
+| 351 | Split payment equally | ❌ | |
+| 352 | Split payment by items | ❌ | |
+| 353 | UPI payment per member | ❌ | |
+| 354 | Track pending payments | ❌ | |
+| 355 | Host approval before ordering | ❌ | |
+| 356 | Lock cart (no more edits) | ❌ | |
+| 357 | Remove member from group | ❌ | |
+| 358 | Transfer host role | ❌ | |
+| 359 | Live cart synchronization (WebSocket) | ❌ | |
+| 360 | Countdown before order placement | ❌ | |
+| 361 | One-click reorder for group | ❌ | |
+| 362 | Group order history | ❌ | |
+| 363 | Event mode (Birthday, Office Lunch, Party) | ❌ | |
+
+---
+
+## V. AI Features (Cravon Differentiator)
+
+**Example flow:** *"I'm hungry. Budget ₹350. I want spicy chicken. Deliver within 30 minutes."* → AI finds restaurants, selects dishes, applies coupons, creates cart, places order after confirmation.
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 364 | AI Food Ordering Assistant (chat UI) | ❌ | Core differentiator — not started |
+| 365 | Conversational AI | ❌ | |
+| 366 | Natural language search | ❌ | |
+| 367 | Recommend food / dishes | ❌ | |
+| 368 | Recommend restaurants | ❌ | |
+| 369 | Compare restaurants | ❌ | |
+| 370 | Understand budget constraints | ❌ | |
+| 371 | Understand dietary preferences | ❌ | |
+| 372 | Understand allergies | ❌ | |
+| 373 | Recommend healthy meals | ❌ | |
+| 374 | Mood-based recommendations | ❌ | |
+| 375 | Suggest combos | ❌ | |
+| 376 | Build complete cart from chat | ❌ | |
+| 377 | Apply best coupon automatically (AI) | ❌ | |
+| 378 | Answer restaurant questions | ❌ | |
+| 379 | Order directly from chat (with confirmation) | ❌ | |
+| 380 | Modify cart from chat | ❌ | |
+| 381 | Track order from chat | ❌ | |
+| 382 | Cancel order from chat | ❌ | |
+| 383 | Reorder previous meals from chat | ❌ | |
+| 384 | Voice conversation | ❌ | Voice search exists — not conversational AI |
+| 385 | Multi-language support (AI) | ❌ | |
+| 386 | Explain recommendations (why this dish) | ❌ | |
+
+---
+
+## W. Nice-to-Have (UX & Platform)
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 387 | Dark mode | ✅ | |
+| 388 | Light mode | ✅ | |
+| 389 | Responsive design (mobile / tablet / desktop) | ✅ | Tailwind responsive |
+| 390 | Skeleton loaders / shimmer cards | ✅ | Home infinite scroll |
+| 391 | Infinite scrolling | ✅ | Home restaurant list |
+| 392 | Lazy loading (images / routes) | ⚠️ | Partial — no systematic lazy image loading |
+| 393 | PWA support (installable app) | ❌ | |
+| 394 | Offline cart | ⚠️ | Guest localStorage only — not full offline mode |
+| 395 | Share restaurant | ❌ | |
+| 396 | Share food item | ❌ | |
+| 397 | QR code sharing (restaurant / group invite) | ❌ | |
+| 398 | Multi-language UI (Hindi, etc.) | ❌ | |
+| 399 | Accessibility support (a11y) | ⚠️ | Basic semantics — no audit |
+| 400 | Keyboard shortcuts | ❌ | |
+| 401 | SEO optimization | ⚠️ | CRA SPA — limited SSR/SEO |
+| 402 | Error boundaries | ⚠️ | Partial coverage |
+| 403 | Native iOS / Android app | ❌ | Web only |
+
+---
+
+## X. Additional Swiggy/Zomato Features (Out of Scope)
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 404 | Instamart / grocery ordering | ❌ | Out of scope |
+| 405 | Dineout / table booking | ❌ | Out of scope |
+| 406 | Genie / pick & drop | ❌ | Out of scope |
+| 407 | Alcohol delivery | ❌ | Out of scope |
+| 408 | Corporate / bulk ordering | ❌ | |
+| 409 | Gift cards | ❌ | |
+| 410 | Food subscription / tiffin plan | ❌ | |
+| 411 | Share app / refer via WhatsApp | ❌ | |
+| 412 | 2FA / Apple Sign In | ❌ | Post-v1 |
 
 ---
 
@@ -460,11 +635,11 @@
 
 | Status | Count |
 |--------|-------|
-| ✅ Done | **58** |
-| ⚠️ Partial / Bug | **32** |
-| ❌ Not implemented | **172** |
-| **Total features listed** | **262** |
-| **Effective completion** | **~56%** (done + half of partial) |
+| ✅ Done | **95** |
+| ⚠️ Partial / Bug | **48** |
+| ❌ Not implemented | **269** |
+| **Total features listed** | **412** |
+| **Effective completion** | **~52%** (done + half of partial) |
 
 ---
 
@@ -473,7 +648,7 @@
 # PART 2 — RESTAURANT OWNER PORTAL
 
 **Route base:** `/owner`, `/owner/onboard`  
-**Overall completion:** ~48% (14 done · 6 partial · 15 not started)
+**Overall completion:** ~48% (14 done · 6 partial · 62 not started)
 
 ---
 
@@ -639,7 +814,7 @@
 # PART 3 — SUPER ADMIN DASHBOARD
 
 **Route base:** `/admin`  
-**Overall completion:** ~42% (6 done · 2 partial · 8 not started for core; many advanced features not started)
+**Overall completion:** ~42%
 
 ---
 
@@ -794,14 +969,67 @@
 
 ---
 
-# GRAND TOTAL — ALL 3 PORTALS
+# PART 4 — PORTFOLIO-WORTHY TECHNICAL FEATURES
+
+**Purpose:** Engineering checklist for resume / demo — cross-cutting backend, infra, and frontend patterns.
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | Role-based authentication (USER / OWNER / ADMIN) | ✅ | `RoleProtectedRoute` + JWT claims |
+| 2 | JWT + refresh token rotation | ✅ | |
+| 3 | Google OAuth | ✅ | |
+| 4 | Facebook OAuth | ✅ | |
+| 5 | Phone OTP auth | ❌ | |
+| 6 | Redis caching | ❌ | |
+| 7 | WebSockets (real-time order / group cart) | ❌ | Polling only today |
+| 8 | Background jobs (email / notification queue) | ❌ | |
+| 9 | Image upload (Cloudinary / S3) | ❌ | URL fields only |
+| 10 | Payment gateway integration (Razorpay / Stripe) | ❌ | Week 2 |
+| 11 | Maps integration (geocoding / tracking) | ⚠️ | Geocoding proxy — simulated tracking map |
+| 12 | AI API integration (Gemini / OpenAI) | ❌ | AI assistant not started |
+| 13 | Rate limiting | ❌ | |
+| 14 | Server-side validation | ✅ | Express validators on key routes |
+| 15 | Client-side validation | ✅ | Forms + checkout checks |
+| 16 | Pagination | ✅ | Orders, restaurant list pages |
+| 17 | Infinite scroll | ✅ | Home feed |
+| 18 | Optimistic UI updates | ⚠️ | Limited — favourites/cart mostly synchronous |
+| 19 | Debounced search | ✅ | Top bar + search page |
+| 20 | Error boundaries | ⚠️ | Partial |
+| 21 | Logging (structured / request logs) | ⚠️ | Basic console — no centralized logging |
+| 22 | API documentation (Swagger / OpenAPI) | ❌ | |
+| 23 | Docker support | ❌ | |
+| 24 | CI/CD pipeline | ❌ | |
+| 25 | Unit testing | ❌ | |
+| 26 | Integration testing | ❌ | |
+| 27 | Responsive UI | ✅ | |
+| 28 | Clean architecture / layered backend | ⚠️ | Routes + services — room to formalize |
+| 29 | Feature-based folder structure | ⚠️ | Partial on client |
+| 30 | Prisma ORM + migrations | ✅ | |
+| 31 | Environment-based config | ✅ | `.env` dev / Render production |
+| 32 | CORS + secure cookies (production) | ✅ | |
+
+### Technical Features — Summary
+
+| Status | Count |
+|--------|-------|
+| ✅ Done | **14** |
+| ⚠️ Partial | **7** |
+| ❌ Not implemented | **11** |
+| **Total** | **32** |
+
+---
+
+# GRAND TOTAL — ALL PORTALS
 
 | Portal | ✅ Done | ⚠️ Partial | ❌ Missing | Total | Completion |
 |--------|---------|-----------|-----------|-------|------------|
-| User Dashboard | 58 | 32 | 172 | 262 | ~56% |
+| User Dashboard | 95 | 48 | 269 | 412 | ~52% |
 | Owner Portal | 14 | 6 | 62 | 82 | ~48% |
 | Super Admin | 6 | 5 | 56 | 67 | ~42% |
-| **Combined** | **78** | **43** | **290** | **411** | **~52%** |
+| Technical (portfolio) | 14 | 7 | 11 | 32 | ~55% |
+| **Combined (unique scope)** | **129** | **66** | **398** | **593** | **~50%** |
+
+*Technical rows overlap with user/owner features — use Part 4 as an engineering lens, not additive scope.*
 
 ---
 
@@ -810,22 +1038,28 @@
 Use this order when building from the lists above:
 
 ## Phase 1 — User Dashboard fixes (Week 1)
-Items: #104–107, #121–123, #142–144, #33–34, #111, #185, #4, #9–10, #205, #224
+Cart customizations (#155–157, #184), server cart sync (#179), coupon server validation (#207), block closed restaurant ordering (#142), favourites server sync (#168–170), review gate bug (#292), notification bell (#311), orders in sidebar (#279)
 
 ## Phase 2 — User payments + coupons (Week 2)
-Items: #154–160, #142–144, #233–237
+Payments (#225–231), server coupons (#201–208), packaging/platform fees (#189–190)
 
 ## Phase 3 — User tracking + notifications (Week 3)
-Items: #189–196, #223–228, owner #58–59
+WebSockets (#255, #359), real ETA (#250), delivery partner call (#253), push/email notifications (#308–321), owner order alerts (#58–59)
 
 ## Phase 4 — User + Owner + Admin polish (Week 4)
-Items: #29–30, #59, #178, #81–83, #247, admin #10–12, #42–47, owner #13–14
+Home discovery gaps (#55–56, #63–66, #70), filters (#94–96, #101, #103), profile avatar (#21), admin analytics + coupons
 
-## Phase 5 — Launch (Week 5)
-Deploy + docs + remaining P1 items
+## Phase 5 — AI Assistant (Differentiator)
+AI chat UI + NL ordering (#364–386), Gemini/OpenAI integration (Technical #12)
 
-## Post-July (v1.1+)
-Group ordering (#129–133), OTP (#7), email verification (#12), membership (#242), Instamart (#253)
+## Phase 6 — Group Ordering
+Full group flow (#335–363), WebSocket cart sync
+
+## Phase 7 — Launch polish
+PWA (#393), share links (#395–397), Docker + CI/CD (Technical #23–24), Swagger docs (#22)
+
+## Post-v1
+Phone OTP (#5), membership (#212), Instamart (#404), native apps (#403)
 
 ---
 

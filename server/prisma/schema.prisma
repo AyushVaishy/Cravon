@@ -41,8 +41,14 @@ model User {
   emailVerified Boolean      @default(false)
   name          String
   phone         String?
+  avatar        String?
   role          Role         @default(USER)
   refreshToken  String?
+  refreshTokenVersion Int    @default(0)
+  notifyEmailOrders   Boolean @default(true)
+  notifyEmailOffers   Boolean @default(true)
+  notifyPushOrders    Boolean @default(true)
+  notifyPushOffers    Boolean @default(false)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
@@ -53,6 +59,22 @@ model User {
   restaurants  Restaurant[] @relation("OwnerRestaurants")
   passwordResetTokens PasswordResetToken[]
   emailVerificationCodes EmailVerificationCode[]
+  emailChangeCodes EmailChangeCode[]
+}
+
+model EmailChangeCode {
+  id        String    @id @default(uuid())
+  userId    String
+  newEmail  String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model EmailVerificationCode {
@@ -83,17 +105,19 @@ model PasswordResetToken {
 }
 
 model Address {
-  id        String   @id @default(uuid())
-  userId    String
-  label     String   @default("Home")
-  street    String
-  city      String
-  state     String
-  pincode   String
-  lat       Float
-  lng       Float
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id           String   @id @default(uuid())
+  userId       String
+  label        String   @default("Home")
+  contactName  String?
+  contactPhone String?
+  street       String
+  city         String
+  state        String
+  pincode      String
+  lat          Float
+  lng          Float
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders Order[]
@@ -116,6 +140,8 @@ model Restaurant {
   costForTwo  Int      @default(200) // in rupees
   isOpen      Boolean  @default(true)
   isApproved  Boolean  @default(false)
+  isPureVeg     Boolean  @default(false)
+  offerTag      String?
   openingTime String?  @default("09:00")
   closingTime String?  @default("23:00")
   fssaiNumber String?
@@ -179,6 +205,8 @@ model Order {
   status       OrderStatus @default(PLACED)
   totalAmount  Int         // in paise
   notes        String?
+  contactless  Boolean     @default(false)
+  deliveryPhone String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 

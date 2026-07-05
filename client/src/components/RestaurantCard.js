@@ -2,64 +2,19 @@ import { Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { FaStar, FaHeart, FaRegHeart } from "react-icons/fa";
 import { toggleFavourite, selectIsFavourite } from "../store/favoritesSlice";
+import { RestaurantStatusBadges } from "../utils/restaurantDisplay";
 
 const PLACEHOLDER_IMG =
   "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop";
 
-// Deterministically assign offers based on restaurant id string
-const OFFER_POOL = [
-  null,
-  null,
-  "20% OFF up to ₹100",
-  "Free Delivery",
-  "50% OFF up to ₹80",
-  null,
-  "30% OFF on first order",
-  null,
-  "Flat ₹50 OFF",
-  null,
-];
-
-const getOffer = (id = "") => {
-  const sum = id.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return OFFER_POOL[sum % OFFER_POOL.length];
-};
-
-const getClosingStatus = (openingTime, closingTime) => {
-  if (!openingTime || !closingTime) return { isOpen: true, closingIn: null };
-  const parseTime = (t) => {
-    if (!t) return null;
-    const s = t.toString().trim().toUpperCase();
-    const pm = s.includes('PM');
-    const am = s.includes('AM');
-    const cleaned = s.replace(/[APM\s]/g, '');
-    const [h, m = '0'] = cleaned.split(':');
-    let hour = parseInt(h, 10);
-    const min = parseInt(m, 10);
-    if (pm && hour !== 12) hour += 12;
-    if (am && hour === 12) hour = 0;
-    return hour * 60 + min;
-  };
-  const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-  const open = parseTime(openingTime);
-  const close = parseTime(closingTime);
-  if (open === null || close === null) return { isOpen: true, closingIn: null };
-  const isOpen = nowMins >= open && nowMins < close;
-  const closingIn = isOpen ? close - nowMins : null;
-  return { isOpen, closingIn };
-};
-
 const RestaurantCard = ({ resData }) => {
   const dispatch = useDispatch();
   const isFav = useSelector(selectIsFavourite(resData.id));
-  const { id, name, cuisines, avgRating, costForTwo, deliveryTime, imageUrl, isOpen, openingTime, closingTime } = resData;
+  const { id, name, cuisines, avgRating, costForTwo, deliveryTime, imageUrl } = resData;
 
   const cuisineList = Array.isArray(cuisines) ? cuisines : (cuisines || "").split(",").map((c) => c.trim());
   const displayCuisines = cuisineList.slice(0, 2);
   const extraCount = cuisineList.length - displayCuisines.length;
-  const offer = getOffer(id);
-  const closingStatus = getClosingStatus(openingTime, closingTime);
 
   const handleFavClick = (e) => {
     e.preventDefault();
@@ -70,7 +25,6 @@ const RestaurantCard = ({ resData }) => {
   return (
     <Link to={`/home/restaurants/${id}`} className="block">
       <div className="m-2 bg-card rounded-xl shadow hover:shadow-xl transition-all duration-300 hover:scale-[1.02] border border-border overflow-hidden">
-        {/* Image */}
         <div className="relative w-full h-[160px] overflow-hidden">
           <img
             className="w-full h-full object-cover"
@@ -78,68 +32,32 @@ const RestaurantCard = ({ resData }) => {
             alt={name}
             onError={(e) => { e.target.src = PLACEHOLDER_IMG; }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-          {/* Open/closed badge */}
-          {isOpen === false && (
-            <span className="absolute top-2 left-2 bg-black/70 text-white text-xs font-semibold px-2 py-0.5 rounded-md">
-              CLOSED
-            </span>
-          )}
-          {/* Offer badge */}
-          {isOpen !== false && offer && (
-            <span className="absolute top-2 left-2 bg-primary/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow">
-              🏷 {offer}
-            </span>
-          )}
-          {/* Delivery time pill on image */}
-          <span className="absolute bottom-2 left-2 bg-black/60 text-white text-xs font-medium px-2 py-0.5 rounded-md">
-            🚀 {deliveryTime ?? "30"} min
-          </span>
-          {/* Closes soon pill */}
-          {closingStatus.isOpen && closingStatus.closingIn !== null && closingStatus.closingIn < 60 && (
-            <span className="absolute bottom-2 right-2 bg-primary/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-              Closes in {closingStatus.closingIn}m
-            </span>
-          )}
-          {/* Favourite heart button */}
+          <RestaurantStatusBadges resData={resData} />
           <button
             onClick={handleFavClick}
-            className="absolute top-2 right-2 w-8 h-8 bg-card/90 rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform z-10"
-            aria-label={isFav ? "Remove from favourites" : "Add to favourites"}
+            className="absolute top-2 right-2 w-8 h-8 bg-white/90 dark:bg-black/50 rounded-full flex items-center justify-center shadow hover:scale-110 transition-transform z-10"
           >
-            {isFav
-              ? <FaHeart className="text-red-500" size={14} />
-              : <FaRegHeart className="text-muted-foreground" size={14} />
-            }
+            {isFav ? <FaHeart className="text-red-500" size={14} /> : <FaRegHeart className="text-gray-600 dark:text-gray-300" size={14} />}
           </button>
         </div>
-
-        {/* Info */}
         <div className="p-3">
           <h3 className="font-bold text-base text-foreground line-clamp-1 mb-1">{name}</h3>
-
-          {/* Cuisine chips */}
-          <div className="flex flex-wrap gap-1 mb-2">
-            {displayCuisines.map((c) => (
-              <span key={c} className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
-                {c}
-              </span>
-            ))}
-            {extraCount > 0 && (
-              <span className="text-xs text-muted-foreground">+{extraCount} more</span>
-            )}
-          </div>
-
-          {/* Rating & price */}
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1 text-sm font-semibold text-green-700 bg-green-50 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded">
-              <FaStar className="text-green-600 dark:text-green-400" size={11} />
-              {avgRating || "New"}
+          <p className="text-xs text-muted-foreground mb-2">
+            {displayCuisines.join(", ")}
+            {extraCount > 0 && ` +${extraCount} more`}
+          </p>
+          <div className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-1 font-semibold text-green-600 dark:text-green-400">
+              <FaStar size={11} /> {avgRating || "New"}
             </span>
-            <span className="text-xs text-muted-foreground">
-              ₹{Math.round(costForTwo / 100)} for two
-            </span>
+            <span className="text-muted-foreground text-xs">{deliveryTime ?? 30} mins</span>
+            <span className="text-muted-foreground text-xs">₹{Math.round((costForTwo || 0) / 100)} for two</span>
           </div>
+          {resData.isPureVeg && (
+            <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+              🌿 Pure Veg
+            </span>
+          )}
         </div>
       </div>
     </Link>

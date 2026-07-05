@@ -12,6 +12,31 @@ const SkeletonCard = () => (
   </div>
 );
 
+/** Matches HomePage GlassGridCard layout */
+export const ShimmerGridCard = () => (
+  <div className="glass-card rounded-2xl overflow-hidden animate-pulse" aria-hidden>
+    <div className="w-full h-[150px] bg-muted/80" />
+    <div className="p-3 space-y-2">
+      <div className="h-4 bg-muted rounded-md w-4/5" />
+      <div className="h-3 bg-muted rounded-md w-1/2" />
+      <div className="h-3 bg-muted rounded-md w-3/5" />
+      <div className="flex items-center justify-between pt-1">
+        <div className="h-5 w-14 bg-muted rounded-md" />
+        <div className="h-3 w-20 bg-muted rounded-md" />
+      </div>
+    </div>
+  </div>
+);
+
+/** Row of grid card shimmers for infinite scroll / load-more */
+export const ShimmerGridCards = ({ count = 4 }) => (
+  <>
+    {Array.from({ length: count }).map((_, i) => (
+      <ShimmerGridCard key={`shimmer-${i}`} />
+    ))}
+  </>
+);
+
 /** Skeleton row of circular category cards */
 export const ShimmerCategories = () => (
   <div className="flex gap-6 sm:gap-10 overflow-hidden pb-4">

@@ -1,5 +1,5 @@
 /**
- * Cravon DB Seed — Zomato CSV data (100 Bangalore restaurants)
+ * Cravon DB Seed — Zomato CSV (100 Bangalore) + dummy multi-city restaurants
  * Idempotent: wipes seeded data then recreates.
  * Usage: npm run db:seed
  */
@@ -8,6 +8,8 @@ require("dotenv").config();
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const path = require("path");
+const { generateCityRestaurants, getCitySummary, TARGET_TOTAL_RESTAURANTS } = require("./city-restaurants");
+const { enrichRestaurantSeed } = require("../src/utils/restaurantMeta");
 
 const prisma = new PrismaClient();
 
@@ -190,39 +192,62 @@ function generateMenuItems(dishes, cuisines, costForTwo) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const PARSED = require(path.join(__dirname, "zomato-parsed.json"));
+  const BANGALORE = require(path.join(__dirname, "zomato-parsed.json"));
+  const CITY_DATA = generateCityRestaurants();
+  const PARSED = [...BANGALORE, ...CITY_DATA];
   const PASSWORD = await bcrypt.hash("Test1234!", 12);
   const OWNER_EMAILS = USERS.filter((u) => u.role === "RESTAURANT_OWNER").map((u) => u.email);
 
+  const summary = getCitySummary();
+  console.log(`📍 Target: ${TARGET_TOTAL_RESTAURANTS} total (${BANGALORE.length} Bangalore Zomato + ${CITY_DATA.length} multi-city)`);
+  console.log(`   Cities: ${summary.map((s) => `${s.city} (${s.count})`).join(", ")}`);
+
   console.log("🧹 Cleaning previous seed data…");
 
-  // Delete restaurants owned by seed owners (cascades to menuItems, orders, etc.)
-  const seedOwners = await prisma.user.findMany({
+  const seedUsers = await prisma.user.findMany({
     where: { email: { in: USERS.map((u) => u.email) } },
     select: { id: true },
   });
-  const seedOwnerIds = seedOwners.map((u) => u.id);
+  const seedUserIds = seedUsers.map((u) => u.id);
 
-  if (seedOwnerIds.length > 0) {
-    // Delete order items → orders → carts → reviews, then restaurants
+  if (seedUserIds.length > 0) {
     const restaurants = await prisma.restaurant.findMany({
-      where: { ownerId: { in: seedOwnerIds } },
+      where: { ownerId: { in: seedUserIds } },
       select: { id: true },
     });
     const restIds = restaurants.map((r) => r.id);
 
+    const orderFilter = {
+      OR: [
+        { userId: { in: seedUserIds } },
+        ...(restIds.length ? [{ restaurantId: { in: restIds } }] : []),
+      ],
+    };
+
+    await prisma.orderItem.deleteMany({ where: { order: orderFilter } });
+    await prisma.order.deleteMany({ where: orderFilter });
+
+    await prisma.review.deleteMany({
+      where: {
+        OR: [
+          { userId: { in: seedUserIds } },
+          ...(restIds.length ? [{ restaurantId: { in: restIds } }] : []),
+        ],
+      },
+    });
+
+    await prisma.cartItem.deleteMany({ where: { cart: { userId: { in: seedUserIds } } } });
+    await prisma.cart.deleteMany({ where: { userId: { in: seedUserIds } } });
+
     if (restIds.length > 0) {
-      await prisma.orderItem.deleteMany({ where: { order: { restaurantId: { in: restIds } } } });
-      await prisma.order.deleteMany({ where: { restaurantId: { in: restIds } } });
       await prisma.cartItem.deleteMany({ where: { cart: { restaurantId: { in: restIds } } } });
       await prisma.cart.deleteMany({ where: { restaurantId: { in: restIds } } });
-      await prisma.review.deleteMany({ where: { restaurantId: { in: restIds } } });
       await prisma.menuItem.deleteMany({ where: { restaurantId: { in: restIds } } });
       await prisma.restaurant.deleteMany({ where: { id: { in: restIds } } });
     }
 
-    await prisma.address.deleteMany({ where: { userId: { in: seedOwnerIds } } });
-    await prisma.user.deleteMany({ where: { id: { in: seedOwnerIds } } });
+    await prisma.address.deleteMany({ where: { userId: { in: seedUserIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: seedUserIds } } });
   }
 
   // ── Create users ────────────────────────────────────────────────────────────
@@ -244,6 +269,8 @@ async function main() {
     const ownerEmail = OWNER_EMAILS[i % OWNER_EMAILS.length];
     const owner = createdUsers[ownerEmail];
 
+    const meta = enrichRestaurantSeed(r, i);
+
     const restaurant = await prisma.restaurant.create({
       data: {
         ownerId: owner.id,
@@ -258,7 +285,9 @@ async function main() {
         costForTwo: r.costForTwo || 50000,
         avgRating: r.avgRating ?? 0,
         phone: r.phone || null,
-        isOpen: true,
+        isOpen: meta.isOpen,
+        isPureVeg: meta.isPureVeg,
+        offerTag: meta.offerTag,
         isApproved: true,
         openingTime: "09:00",
         closingTime: "23:00",

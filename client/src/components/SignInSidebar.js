@@ -41,6 +41,7 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn, initialTab = "login" }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem("cravon_remember_me") === "1");
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
@@ -188,8 +189,9 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn, initialTab = "login" }) => {
     setIsSubmitting(true);
     setApiError("");
     try {
-      const res = await login({ email: formData.email, password: formData.password });
+      const res = await login({ email: formData.email, password: formData.password, rememberMe });
       const { user, accessToken } = res.data;
+      localStorage.setItem("cravon_remember_me", rememberMe ? "1" : "0");
       finishAuth(user, accessToken);
     } catch (err) {
       const data = err?.response?.data;
@@ -333,6 +335,16 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn, initialTab = "login" }) => {
                       </button>
                     </div>
                   </div>
+
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="w-4 h-4 rounded border-border accent-primary"
+                    />
+                    <span className="text-sm text-muted-foreground font-medium">Remember me for 30 days</span>
+                  </label>
 
                   <button type="submit" disabled={isSubmitting}
                     className="w-full bg-primary hover:opacity-90 text-white py-3 sm:py-3.5 rounded-full font-bold text-base transition-all mt-4 flex items-center justify-center disabled:opacity-60">

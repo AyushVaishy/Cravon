@@ -10,7 +10,8 @@ const {
 } = require("../config/facebook");
 const { getFrontendUrl } = require("../config/urls");
 const { setRefreshCookie, clearRefreshCookie } = require("../utils/cookies");
-const { sendPasswordResetEmail, sendVerificationOtpEmail } = require("../services/emailService");
+const { sendPasswordResetEmail, sendVerificationOtpEmail, sendEmailChangeOtpEmail } = require("../services/emailService");
+const { removeAvatarFiles } = require("../utils/avatarStorage");
 
 const RESET_TOKEN_BYTES = 32;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -76,28 +77,37 @@ const userPayload = (user) => ({
   id: user.id,
   name: user.name,
   email: user.email,
+  phone: user.phone ?? null,
+  avatar: user.avatar ?? null,
   role: user.role,
   emailVerified: Boolean(user.emailVerified),
+  notifyEmailOrders: user.notifyEmailOrders ?? true,
+  notifyEmailOffers: user.notifyEmailOffers ?? true,
+  notifyPushOrders: user.notifyPushOrders ?? true,
+  notifyPushOffers: user.notifyPushOffers ?? false,
 });
 
-const generateTokens = (user) => {
+const generateTokens = (user, rememberMe = false) => {
   const accessToken = jwt.sign(
     { id: user.id, email: user.email, role: user.role },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_ACCESS_EXPIRES || "15m" }
   );
+  const refreshExpires = rememberMe
+    ? process.env.JWT_REFRESH_REMEMBER_EXPIRES || "30d"
+    : process.env.JWT_REFRESH_EXPIRES || "7d";
   const refreshToken = jwt.sign(
-    { id: user.id },
+    { id: user.id, v: user.refreshTokenVersion ?? 0 },
     process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES || "7d" }
+    { expiresIn: refreshExpires }
   );
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, rememberMe };
 };
 
-const issueSession = async (res, user) => {
-  const { accessToken, refreshToken } = generateTokens(user);
+const issueSession = async (res, user, rememberMe = false) => {
+  const { accessToken, refreshToken } = generateTokens(user, rememberMe);
   await prisma.user.update({ where: { id: user.id }, data: { refreshToken } });
-  setRefreshCookie(res, refreshToken);
+  setRefreshCookie(res, refreshToken, rememberMe);
   return { accessToken, user: userPayload(user) };
 };
 
@@ -163,7 +173,7 @@ const signup = async (req, res, next) => {
 
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(401).json({ message: "Invalid email or password" });
@@ -184,7 +194,7 @@ const login = async (req, res, next) => {
       });
     }
 
-    const session = await issueSession(res, user);
+    const session = await issueSession(res, user, Boolean(rememberMe));
     res.json(session);
   } catch (err) {
     next(err);
@@ -204,6 +214,22 @@ const logout = async (req, res, next) => {
   }
 };
 
+const logoutAllDevices = async (req, res, next) => {
+  try {
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        refreshToken: null,
+        refreshTokenVersion: { increment: 1 },
+      },
+    });
+    clearRefreshCookie(res);
+    res.json({ message: "Logged out from all devices successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const refreshToken = async (req, res, next) => {
   try {
     const token = req.cookies.refreshToken;
@@ -214,10 +240,14 @@ const refreshToken = async (req, res, next) => {
     if (!user || user.refreshToken !== token) {
       return res.status(401).json({ message: "Invalid refresh token" });
     }
+    if (decoded.v !== undefined && decoded.v !== (user.refreshTokenVersion ?? 0)) {
+      return res.status(401).json({ message: "Session expired. Please sign in again." });
+    }
 
-    const { accessToken, refreshToken: newRefresh } = generateTokens(user);
+    const rememberMe = Boolean(req.body?.rememberMe);
+    const { accessToken, refreshToken: newRefresh } = generateTokens(user, rememberMe);
     await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefresh } });
-    setRefreshCookie(res, newRefresh);
+    setRefreshCookie(res, newRefresh, rememberMe);
 
     res.json({ accessToken });
   } catch (err) {
@@ -347,11 +377,16 @@ const getMe = async (req, res, next) => {
         name: true,
         email: true,
         phone: true,
+        avatar: true,
         role: true,
         emailVerified: true,
         password: true,
         googleId: true,
         facebookId: true,
+        notifyEmailOrders: true,
+        notifyEmailOffers: true,
+        notifyPushOrders: true,
+        notifyPushOffers: true,
         addresses: true,
       },
     });
@@ -492,6 +527,166 @@ const changePassword = async (req, res, next) => {
   }
 };
 
+const { removeLegacyAvatarFiles } = require("../middleware/uploadAvatar");
+
+const uploadAvatar = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image file uploaded. Use field name 'avatar'." });
+    }
+
+    const ext = req.file.filename.split(".").pop();
+    removeLegacyAvatarFiles(req.user.id, ext);
+
+    const avatarPath = `/uploads/avatars/${req.file.filename}`;
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { avatar: avatarPath },
+      select: { id: true, name: true, email: true, phone: true, avatar: true, role: true },
+    });
+    res.json({ user, message: "Profile picture updated" });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message });
+    next(err);
+  }
+};
+
+const updateNotificationSettings = async (req, res, next) => {
+  try {
+    const data = {};
+    ["notifyEmailOrders", "notifyEmailOffers", "notifyPushOrders", "notifyPushOffers"].forEach((key) => {
+      if (typeof req.body[key] === "boolean") data[key] = req.body[key];
+    });
+    if (!Object.keys(data).length) {
+      return res.status(400).json({ message: "No notification settings provided" });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        avatar: true,
+        role: true,
+        notifyEmailOrders: true,
+        notifyEmailOffers: true,
+        notifyPushOrders: true,
+        notifyPushOffers: true,
+      },
+    });
+    res.json({ user: userPayload(user), message: "Notification preferences saved" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const requestEmailChange = async (req, res, next) => {
+  try {
+    const { newEmail } = req.body;
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.email === newEmail) {
+      return res.status(400).json({ message: "That is already your email address." });
+    }
+
+    const taken = await prisma.user.findUnique({ where: { email: newEmail } });
+    if (taken) return res.status(409).json({ message: "This email is already in use." });
+
+    const code = generateOtp();
+    const codeHash = hashOtp(code);
+    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
+
+    await prisma.emailChangeCode.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    await prisma.emailChangeCode.create({
+      data: { userId: user.id, newEmail, codeHash, expiresAt },
+    });
+
+    await sendEmailChangeOtpEmail({ to: newEmail, name: user.name, code, newEmail });
+
+    res.json({ message: "Verification code sent to your new email address." });
+  } catch (err) {
+    console.error("request-email-change error:", err.message);
+    if (err.status === 503) {
+      return res.status(503).json({ message: "Unable to send verification email right now." });
+    }
+    next(err);
+  }
+};
+
+const confirmEmailChange = async (req, res, next) => {
+  try {
+    const { code } = req.body;
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const record = await prisma.emailChangeCode.findFirst({
+      where: { userId: user.id, usedAt: null },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!record || record.expiresAt < new Date()) {
+      return res.status(400).json({ message: "Verification code expired. Request a new one." });
+    }
+    if (record.attempts >= OTP_MAX_ATTEMPTS) {
+      return res.status(429).json({ message: "Too many attempts. Request a new code." });
+    }
+    if (record.codeHash !== hashOtp(code)) {
+      await prisma.emailChangeCode.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      return res.status(400).json({ message: "Invalid verification code." });
+    }
+
+    const taken = await prisma.user.findUnique({ where: { email: record.newEmail } });
+    if (taken) return res.status(409).json({ message: "This email is already in use." });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.emailChangeCode.update({ where: { id: record.id }, data: { usedAt: new Date() } });
+      return tx.user.update({
+        where: { id: user.id },
+        data: { email: record.newEmail, emailVerified: true },
+      });
+    });
+
+    const session = await issueSession(res, updated);
+    res.json({ ...session, message: "Email updated successfully." });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteAccount = async (req, res, next) => {
+  try {
+    const { password, confirmPhrase } = req.body;
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.password) {
+      if (!password) return res.status(400).json({ message: "Password is required to delete your account." });
+      const valid = await bcrypt.compare(password, user.password);
+      if (!valid) return res.status(400).json({ message: "Incorrect password." });
+    } else if (confirmPhrase !== "DELETE MY ACCOUNT") {
+      return res.status(400).json({ message: 'Type "DELETE MY ACCOUNT" to confirm deletion.' });
+    }
+
+    removeAvatarFiles(user.id);
+    await prisma.user.delete({ where: { id: user.id } });
+    clearRefreshCookie(res);
+    res.json({ message: "Your account has been permanently deleted." });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const googleAuth = (req, res, next) => {
   try {
     const client = getGoogleOAuthClient();
@@ -621,6 +816,7 @@ module.exports = {
   signup,
   login,
   logout,
+  logoutAllDevices,
   refreshToken,
   forgotPassword,
   verifyResetToken,
@@ -630,6 +826,11 @@ module.exports = {
   getMe,
   updateMe,
   changePassword,
+  uploadAvatar,
+  updateNotificationSettings,
+  requestEmailChange,
+  confirmEmailChange,
+  deleteAccount,
   googleAuth,
   googleCallback,
   facebookAuth,

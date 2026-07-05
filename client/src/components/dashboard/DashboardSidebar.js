@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
+import { resolveAvatarUrl } from "../../utils/avatarUrl";
 import {
   FaHome,
   FaQuestionCircle,
@@ -21,6 +22,7 @@ const DashboardSidebar = ({ isDark }) => {
   const user = useSelector((s) => s.auth.user);
   const isAuthenticated = useSelector((s) => s.auth.isAuthenticated) || !!localStorage.getItem("accessToken");
   const cartCount = cartItems.reduce((a, i) => a + (i.quantity || 1), 0);
+  const avatarUrl = resolveAvatarUrl(user?.avatar);
   const brandIcon = `${process.env.PUBLIC_URL}/${isDark ? "cravon_dark_mode_icon.png" : "cravon_light_mode_icon.png"}`;
 
   const openSignIn = () => window.dispatchEvent(new Event("openSignIn"));
@@ -88,8 +90,8 @@ const DashboardSidebar = ({ isDark }) => {
           title={isAuthenticated ? "Profile" : "Sign in"}
           className="w-11 h-11 mb-2 rounded-full overflow-hidden ring-2 ring-gray-100 dark:ring-white/10 hover:ring-[#FF5A5F]/60 hover:scale-110 transition-all duration-300 flex-shrink-0 shadow-sm"
         >
-          {user?.avatar ? (
-            <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-[#FF5A5F] to-[#FF8A8F] flex items-center justify-center">
               {user?.name ? (

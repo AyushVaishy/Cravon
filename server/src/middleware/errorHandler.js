@@ -1,6 +1,15 @@
 const errorHandler = (err, req, res, next) => {
-  const status = err.status || 500;
-  const message = err.message || "Internal Server Error";
+  const isPayloadTooLarge =
+    err.type === "entity.too.large" ||
+    err.status === 413 ||
+    err.statusCode === 413 ||
+    err.code === "LIMIT_FILE_SIZE" ||
+    /entity too large|file too large/i.test(err.message || "");
+
+  const status = isPayloadTooLarge ? 413 : err.status || 500;
+  const message = isPayloadTooLarge
+    ? "File too large. Maximum upload size is 10 MB."
+    : err.message || "Internal Server Error";
 
   if (process.env.NODE_ENV !== "production") {
     console.error(err.stack);

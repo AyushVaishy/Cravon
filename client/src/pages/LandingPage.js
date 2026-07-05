@@ -1,5 +1,6 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import {
   FaBolt,
   FaBrain,
@@ -13,10 +14,41 @@ import {
   FaUserFriends,
 } from "react-icons/fa";
 import LandingLayout, { useLandingUi } from "../components/landing/LandingLayout";
+import { searchLocations } from "../services/locationService";
+import { saveBrowseLocation } from "../utils/locationStorage";
 
 const LandingHomeContent = () => {
   const { openAuth } = useLandingUi();
   const navigate = useNavigate();
+  const [locationQuery, setLocationQuery] = useState("");
+  const [foodQuery, setFoodQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+
+  const handleBrowse = async () => {
+    const q = locationQuery.trim();
+    if (q) {
+      setSearching(true);
+      try {
+        const res = await searchLocations(q);
+        const results = res.data.results || [];
+        if (results.length === 0) {
+          toast.error("Location not found. Try a city, area, or pincode.");
+          return;
+        }
+        const pick = results[0];
+        saveBrowseLocation({ lat: pick.lat, lng: pick.lng, address: pick.displayName });
+      } catch {
+        toast.error("Could not search location. Try again.");
+        return;
+      } finally {
+        setSearching(false);
+      }
+    }
+    const params = foodQuery.trim()
+      ? `/home/search?q=${encodeURIComponent(foodQuery.trim())}`
+      : "/home";
+    navigate(params);
+  };
 
   const featureCards = [
     {
@@ -74,6 +106,9 @@ const LandingHomeContent = () => {
                 <input
                   type="text"
                   placeholder="Enter location..."
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleBrowse()}
                   className="w-full bg-transparent py-3 text-app-primary outline-none placeholder:text-app-secondary/60"
                 />
               </div>
@@ -83,15 +118,19 @@ const LandingHomeContent = () => {
                 <input
                   type="text"
                   placeholder="Search food or restaurant"
+                  value={foodQuery}
+                  onChange={(e) => setFoodQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleBrowse()}
                   className="w-full bg-transparent py-3 text-app-primary outline-none placeholder:text-app-secondary/60"
                 />
               </div>
               <button
                 type="button"
-                onClick={() => navigate("/home")}
-                className="w-full shrink-0 rounded-2xl bg-brand px-8 py-3 font-bold text-white transition-colors hover:bg-brand-dark sm:w-auto"
+                onClick={handleBrowse}
+                disabled={searching}
+                className="w-full shrink-0 rounded-2xl bg-brand px-8 py-3 font-bold text-white transition-colors hover:bg-brand-dark disabled:opacity-60 sm:w-auto"
               >
-                Browse restaurants
+                {searching ? "Searching…" : "Browse restaurants"}
               </button>
             </div>
 

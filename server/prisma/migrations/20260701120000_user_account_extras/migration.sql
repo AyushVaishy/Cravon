@@ -1,0 +1,26 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "avatar" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "refreshTokenVersion" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "notifyEmailOrders" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "notifyEmailOffers" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "notifyPushOrders" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "notifyPushOffers" BOOLEAN NOT NULL DEFAULT false;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "EmailChangeCode" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "newEmail" TEXT NOT NULL,
+    "codeHash" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "usedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmailChangeCode_pkey" PRIMARY KEY ("id")
+);
+
+CREATE INDEX IF NOT EXISTS "EmailChangeCode_userId_idx" ON "EmailChangeCode"("userId");
+
+ALTER TABLE "EmailChangeCode" DROP CONSTRAINT IF EXISTS "EmailChangeCode_userId_fkey";
+ALTER TABLE "EmailChangeCode" ADD CONSTRAINT "EmailChangeCode_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

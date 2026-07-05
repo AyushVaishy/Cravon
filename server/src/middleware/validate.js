@@ -45,6 +45,7 @@ const signupSchema = z.discriminatedUnion("role", [
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(1, "Password is required"),
+  rememberMe: z.boolean().optional(),
 });
 
 const forgotPasswordSchema = z.object({
@@ -75,6 +76,30 @@ const resendVerificationSchema = z.object({
   email: z.string().email("Invalid email address"),
 });
 
+const avatarUploadSchema = z.object({
+  imageBase64: z.string().min(1, "Image data is required"),
+});
+
+const notificationSettingsSchema = z.object({
+  notifyEmailOrders: z.boolean().optional(),
+  notifyEmailOffers: z.boolean().optional(),
+  notifyPushOrders: z.boolean().optional(),
+  notifyPushOffers: z.boolean().optional(),
+});
+
+const requestEmailChangeSchema = z.object({
+  newEmail: z.string().email("Invalid email address"),
+});
+
+const confirmEmailChangeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit verification code"),
+});
+
+const deleteAccountSchema = z.object({
+  password: z.string().optional(),
+  confirmPhrase: z.string().optional(),
+});
+
 module.exports = {
   validate,
   signupSchema,
@@ -84,5 +109,10 @@ module.exports = {
   changePasswordSchema,
   verifyEmailSchema,
   resendVerificationSchema,
+  avatarUploadSchema,
+  notificationSettingsSchema,
+  requestEmailChangeSchema,
+  confirmEmailChangeSchema,
+  deleteAccountSchema,
   passwordSchema,
 };

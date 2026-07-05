@@ -9,6 +9,8 @@ dist/
 coverage/
 **/.cache/
 *.tsbuildinfo
+.eslintcache
+**/.eslintcache/
 
 # Logs
 *.log
@@ -17,11 +19,27 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Environment variables and secrets
+# Environment variables and secrets (keep .env.example templates)
 .env
 .env.local
 .env.*.local
+**/.env
+!**/.env.example
 
-# OS/editor noise
+# Root-level leftovers (app lives in client/ and server/)
+/public/
+/tailwind.config.js
+/postcss.config.js
+
+# Local IDE / agent tooling (not part of the app)
+.github/
+.cursor/
+
+# User-uploaded files (avatars, etc.)
+server/uploads/
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/

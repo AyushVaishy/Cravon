@@ -24,9 +24,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
       try {
+        const rememberMe = localStorage.getItem("cravon_remember_me") === "1";
         const { data } = await axios.post(
           `${API_BASE_URL}/auth/refresh`,
-          {},
+          { rememberMe },
           { withCredentials: true }
         );
         localStorage.setItem("accessToken", data.accessToken);

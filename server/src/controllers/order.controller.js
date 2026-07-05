@@ -1,8 +1,10 @@
 const prisma = require("../config/prisma");
+const { haversineKm, DELIVERY_RADIUS_KM, isValidCoord } = require("../utils/geo");
+const { geocodeAddressParts } = require("../services/geocodingService");
 
 const createOrder = async (req, res, next) => {
   try {
-    const { items, restaurantId, deliveryAddress, notes } = req.body;
+    const { items, restaurantId, addressId, deliveryAddress, deliveryLat, deliveryLng, notes, contactless, deliveryPhone } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "No items provided" });
@@ -11,11 +13,68 @@ const createOrder = async (req, res, next) => {
       return res.status(400).json({ message: "restaurantId is required" });
     }
 
-    // Verify the restaurant exists
     const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId } });
     if (!restaurant) return res.status(404).json({ message: "Restaurant not found" });
+    if (!restaurant.isOpen || !restaurant.isApproved) {
+      return res.status(400).json({ message: "This restaurant is not accepting orders right now." });
+    }
 
-    // Fetch menu items and verify they belong to this restaurant
+    let resolvedAddressId = addressId || null;
+    let orderNotes = notes || null;
+    let destLat = deliveryLat;
+    let destLng = deliveryLng;
+    let resolvedDeliveryPhone = deliveryPhone?.trim() || null;
+
+    if (addressId) {
+      const saved = await prisma.address.findFirst({
+        where: { id: addressId, userId: req.user.id },
+      });
+      if (!saved) return res.status(400).json({ message: "Invalid delivery address" });
+      destLat = saved.lat;
+      destLng = saved.lng;
+      const addrLine = `${saved.street}, ${saved.city}, ${saved.state} ${saved.pincode}`.trim();
+      orderNotes = deliveryAddress || addrLine;
+      if (saved.contactName) {
+        orderNotes = `Contact: ${saved.contactName}${saved.contactPhone ? ` (${saved.contactPhone})` : ""} | ${orderNotes}`;
+      }
+      if (notes) orderNotes += ` | Note: ${notes}`;
+      if (!resolvedDeliveryPhone && saved.contactPhone) {
+        resolvedDeliveryPhone = saved.contactPhone;
+      }
+    } else if (deliveryAddress) {
+      orderNotes = deliveryAddress + (notes ? ` | Note: ${notes}` : "");
+      if (!isValidCoord(destLat, destLng)) {
+        const parts = deliveryAddress.split(",").map((s) => s.trim());
+        const geocoded = await geocodeAddressParts({
+          street: parts[0] || deliveryAddress,
+          city: parts[1] || "",
+          state: parts[2] || "",
+          pincode: (parts.find((p) => /^\d{6}$/.test(p)) || "").slice(0, 6),
+        });
+        if (geocoded) {
+          destLat = geocoded.lat;
+          destLng = geocoded.lng;
+        }
+      }
+    } else {
+      return res.status(400).json({ message: "Delivery address is required" });
+    }
+
+    if (!isValidCoord(destLat, destLng)) {
+      return res.status(400).json({
+        message: "Could not verify your delivery location. Please pick a saved address or enter a complete address with pincode.",
+      });
+    }
+
+    const distanceKm = haversineKm(Number(destLat), Number(destLng), restaurant.lat, restaurant.lng);
+    if (distanceKm > DELIVERY_RADIUS_KM) {
+      return res.status(400).json({
+        message: `${restaurant.name} doesn't deliver to this address (${Math.round(distanceKm * 10) / 10} km away). Maximum delivery range is ${DELIVERY_RADIUS_KM} km.`,
+        distanceKm: Math.round(distanceKm * 10) / 10,
+        maxDeliveryKm: DELIVERY_RADIUS_KM,
+      });
+    }
+
     const menuItemIds = items.map((i) => i.menuItemId);
     const menuItems = await prisma.menuItem.findMany({
       where: { id: { in: menuItemIds }, restaurantId },
@@ -34,9 +93,11 @@ const createOrder = async (req, res, next) => {
       data: {
         userId: req.user.id,
         restaurantId,
-        addressId: null,
+        addressId: resolvedAddressId,
         totalAmount,
-        notes: deliveryAddress || notes || null,
+        notes: orderNotes,
+        contactless: Boolean(contactless),
+        deliveryPhone: resolvedDeliveryPhone,
         items: {
           create: items.map((i) => ({
             menuItemId: i.menuItemId,
@@ -48,17 +109,17 @@ const createOrder = async (req, res, next) => {
       include: {
         items: { include: { menuItem: { select: { name: true, price: true } } } },
         restaurant: { select: { name: true, imageUrl: true } },
+        address: true,
       },
     });
 
-    res.status(201).json({ order });
+    res.status(201).json({ order, distanceKm: Math.round(distanceKm * 10) / 10 });
 
-    // Auto-progress order through statuses (demo: 2-min delivery)
     const AUTO_TIMELINE = [
-      { status: "CONFIRMED",        delay: 20000  },
-      { status: "PREPARING",        delay: 50000  },
-      { status: "OUT_FOR_DELIVERY", delay: 80000  },
-      { status: "DELIVERED",        delay: 120000 },
+      { status: "CONFIRMED", delay: 20000 },
+      { status: "PREPARING", delay: 50000 },
+      { status: "OUT_FOR_DELIVERY", delay: 80000 },
+      { status: "DELIVERED", delay: 120000 },
     ];
     AUTO_TIMELINE.forEach(({ status, delay }) => {
       setTimeout(async () => {
@@ -70,7 +131,6 @@ const createOrder = async (req, res, next) => {
         } catch (_) { /* ignore */ }
       }, delay);
     });
-
   } catch (err) {
     next(err);
   }
@@ -112,7 +172,6 @@ const getOrder = async (req, res, next) => {
   }
 };
 
-// Valid status transitions for order flow
 const ALLOWED_TRANSITIONS = {
   PLACED: ["CONFIRMED", "CANCELLED"],
   CONFIRMED: ["PREPARING", "CANCELLED"],
@@ -130,13 +189,9 @@ const updateOrderStatus = async (req, res, next) => {
       include: { restaurant: true },
     });
     if (!order) return res.status(404).json({ message: "Order not found" });
-
-    // Ensure the caller owns this restaurant (or is admin)
     if (order.restaurant.ownerId !== req.user.id && req.user.role !== "ADMIN") {
       return res.status(403).json({ message: "Forbidden" });
     }
-
-    // Validate transition
     const allowed = ALLOWED_TRANSITIONS[order.status] || [];
     if (!allowed.includes(status)) {
       return res.status(400).json({
@@ -144,7 +199,6 @@ const updateOrderStatus = async (req, res, next) => {
         allowedTransitions: allowed,
       });
     }
-
     const updated = await prisma.order.update({ where: { id: req.params.id }, data: { status } });
     res.json({ order: updated });
   } catch (err) {
@@ -156,9 +210,9 @@ const getRestaurantOrders = async (req, res, next) => {
   try {
     const { restaurantId } = req.params;
     const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId } });
-    if (!restaurant) return res.status(404).json({ message: 'Restaurant not found' });
-    if (restaurant.ownerId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ message: 'Forbidden' });
+    if (!restaurant) return res.status(404).json({ message: "Restaurant not found" });
+    if (restaurant.ownerId !== req.user.id && req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Forbidden" });
     }
     const orders = await prisma.order.findMany({
       where: { restaurantId },
@@ -166,11 +220,13 @@ const getRestaurantOrders = async (req, res, next) => {
         user: { select: { name: true, email: true } },
         items: { include: { menuItem: { select: { name: true } } } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 50,
     });
     res.json({ orders });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 const cancelOrder = async (req, res, next) => {
@@ -180,7 +236,7 @@ const cancelOrder = async (req, res, next) => {
     if (order.userId !== req.user.id) {
       return res.status(403).json({ message: "Forbidden" });
     }
-    if (!['PLACED', 'CONFIRMED'].includes(order.status)) {
+    if (!["PLACED", "CONFIRMED"].includes(order.status)) {
       return res.status(400).json({ message: `Cannot cancel order in ${order.status} status` });
     }
     const updated = await prisma.order.update({
@@ -193,4 +249,11 @@ const cancelOrder = async (req, res, next) => {
   }
 };
 
-module.exports = { createOrder, getOrders, getOrder, updateOrderStatus, getRestaurantOrders, cancelOrder };
+module.exports = {
+  createOrder,
+  getOrders,
+  getOrder,
+  updateOrderStatus,
+  getRestaurantOrders,
+  cancelOrder,
+};

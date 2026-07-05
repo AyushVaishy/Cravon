@@ -6,6 +6,13 @@ import { clearCart, updateQuantity, removeItem } from "../store/cartSlice";
 import { createOrder } from "../services/orderService";
 import { addNotification } from "../store/notificationsSlice";
 import { getAddresses, addAddress as addAddressAPI } from "../services/addressService";
+import { checkServiceability } from "../services/locationService";
+import AddressForm, { EMPTY_ADDRESS_FORM } from "../components/AddressForm";
+import {
+  validateAddressForm,
+  formToPayload,
+  defaultLabelTypeForNew,
+} from "../utils/addressLabels";
 import { FaShoppingCart, FaUtensils, FaMapMarkerAlt, FaCheckCircle, FaPlus, FaTag, FaLock, FaUser } from "react-icons/fa";
 import { Link } from "react-router-dom";
 
@@ -21,17 +28,22 @@ const CartPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
+  const user = useSelector((store) => store.auth.user);
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState(null);
   const [showNewForm, setShowNewForm] = useState(false);
-  const [newAddress, setNewAddress] = useState({ label: "Home", street: "", city: "", state: "", pincode: "" });
+  const [newAddress, setNewAddress] = useState(EMPTY_ADDRESS_FORM);
   const [savingAddress, setSavingAddress] = useState(false);
   const [address, setAddress] = useState(""); // fallback plain text
   const [placing, setPlacing] = useState(false);
   const [suggestion, setSuggestion] = useState("");
+  const [contactless, setContactless] = useState(false);
+  const [useAltPhone, setUseAltPhone] = useState(false);
+  const [deliveryPhone, setDeliveryPhone] = useState("");
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null); // coupon code string
   const [couponError, setCouponError] = useState("");
+  const [serviceabilityMsg, setServiceabilityMsg] = useState("");
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -49,6 +61,20 @@ const CartPage = () => {
       .catch(() => setShowNewForm(true));
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !selectedAddressId || cartItems.length === 0) {
+      setServiceabilityMsg("");
+      return;
+    }
+    const addr = savedAddresses.find((a) => a.id === selectedAddressId);
+    const restaurantId = cartItems[0]?.restaurantId;
+    if (!addr || !restaurantId || !addr.lat || !addr.lng || (addr.lat === 0 && addr.lng === 0)) return;
+
+    checkServiceability({ restaurantId, lat: addr.lat, lng: addr.lng })
+      .then((res) => setServiceabilityMsg(res.data.serviceable ? "" : res.data.message))
+      .catch(() => setServiceabilityMsg(""));
+  }, [isAuthenticated, selectedAddressId, savedAddresses, cartItems]);
+
   const promptSignIn = (intent = "checkout") => {
     sessionStorage.setItem("auth_return_to", "/home/cart");
     sessionStorage.setItem("auth_intent", intent);
@@ -57,27 +83,22 @@ const CartPage = () => {
   };
 
   const handleSaveNewAddress = async () => {
-    if (!newAddress.street.trim() || !newAddress.city.trim()) {
-      toast.error("Street and city are required");
+    const err = validateAddressForm(newAddress, savedAddresses);
+    if (err) {
+      toast.error(err);
       return;
     }
     setSavingAddress(true);
     try {
       const res = await addAddressAPI({
-        label: newAddress.label || "Home",
-        street: newAddress.street.trim(),
-        city: newAddress.city.trim(),
-        state: newAddress.state.trim() || "India",
-        pincode: newAddress.pincode.trim() || "000000",
-        lat: 0,
-        lng: 0,
+        ...formToPayload(newAddress),
         isDefault: savedAddresses.length === 0,
       });
       const added = res.data.address;
       setSavedAddresses((prev) => [...prev, added]);
       setSelectedAddressId(added.id);
       setShowNewForm(false);
-      setNewAddress({ label: "Home", street: "", city: "", state: "", pincode: "" });
+      setNewAddress(EMPTY_ADDRESS_FORM);
       toast.success("Address saved!");
     } catch {
       toast.error("Failed to save address");
@@ -133,17 +154,41 @@ const CartPage = () => {
       toast.error("Please select or enter a delivery address");
       return;
     }
+    if (useAltPhone && !/^\d{10}$/.test(deliveryPhone.trim())) {
+      toast.error("Enter a valid 10-digit alternate phone number");
+      return;
+    }
     if (cartItems.length === 0) return;
 
     setPlacing(true);
     try {
       const restaurantId = cartItems[0].restaurantId;
       const items = cartItems.map((i) => ({ menuItemId: i.id, quantity: i.quantity }));
-      const res = await createOrder({
+
+      let orderPayload = {
         items,
         restaurantId,
-        deliveryAddress: deliveryAddr + (suggestion.trim() ? ` | Note: ${suggestion.trim()}` : ""),
-      });
+        notes: suggestion.trim() || undefined,
+        contactless,
+        deliveryPhone: useAltPhone && deliveryPhone.trim() ? deliveryPhone.trim() : undefined,
+      };
+
+      if (selectedAddressId) {
+        const addr = savedAddresses.find((a) => a.id === selectedAddressId);
+        orderPayload.addressId = selectedAddressId;
+        orderPayload.deliveryLat = addr?.lat;
+        orderPayload.deliveryLng = addr?.lng;
+        orderPayload.deliveryAddress = getDeliveryAddress();
+        if (!useAltPhone && addr?.contactPhone) {
+          orderPayload.deliveryPhone = addr.contactPhone;
+        }
+      } else {
+        orderPayload.deliveryAddress = deliveryAddr;
+        const pinMatch = deliveryAddr.match(/\b\d{6}\b/);
+        if (pinMatch) orderPayload.pincode = pinMatch[0];
+      }
+
+      const res = await createOrder(orderPayload);
       dispatch(clearCart());
       dispatch(addNotification({
         title: "Order Placed! 🎉",
@@ -224,7 +269,17 @@ const CartPage = () => {
                 <h2 className="font-bold text-lg text-foreground">Delivery Address</h2>
               </div>
               <button
-                onClick={() => setShowNewForm((v) => !v)}
+                onClick={() => {
+                  setShowNewForm((v) => !v);
+                  if (!showNewForm) {
+                    setNewAddress({
+                      ...EMPTY_ADDRESS_FORM,
+                      labelType: defaultLabelTypeForNew(savedAddresses),
+                      contactName: user?.name || "",
+                      contactPhone: user?.phone || "",
+                    });
+                  }
+                }}
                 className="flex items-center gap-1.5 text-xs text-primary hover:text-primary font-semibold"
               >
                 <FaPlus size={10} /> Add New
@@ -251,9 +306,21 @@ const CartPage = () => {
                       onChange={() => { setSelectedAddressId(addr.id); setShowNewForm(false); }}
                       className="mt-0.5 accent-primary"
                     />
-                    <div>
-                      <p className="font-semibold text-foreground text-sm">{addr.label}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-foreground text-sm">{addr.label}</p>
+                        {addr.isDefault && (
+                          <span className="text-[10px] font-bold uppercase bg-primary text-white px-1.5 py-0.5 rounded-full">
+                            Default
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">{addr.street}, {addr.city}, {addr.state} {addr.pincode}</p>
+                      {(addr.contactName || addr.contactPhone) && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          📞 {addr.contactName || "—"}{addr.contactPhone ? ` · ${addr.contactPhone}` : ""}
+                        </p>
+                      )}
                     </div>
                   </label>
                 ))}
@@ -262,52 +329,20 @@ const CartPage = () => {
 
             {/* Add new address form */}
             {showNewForm && (
-              <div className="border border-dashed border-primary rounded-lg p-3 space-y-2">
-                <div className="flex gap-2">
-                  {["Home", "Work", "Other"].map((l) => (
-                    <button
-                      key={l}
-                      onClick={() => setNewAddress((p) => ({ ...p, label: l }))}
-                      className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
-                        newAddress.label === l
-                          ? "bg-primary text-white border-primary"
-                          : "bg-section border-border text-muted-foreground"
-                      }`}
-                    >
-                      {l}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="text"
-                  placeholder="Street / Area *"
-                  value={newAddress.street}
-                  onChange={(e) => setNewAddress((p) => ({ ...p, street: e.target.value }))}
-                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-section text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              <div className="mb-3">
+                <AddressForm
+                  title="New delivery address"
+                  value={newAddress}
+                  onChange={setNewAddress}
+                  onSubmit={handleSaveNewAddress}
+                  onCancel={() => {
+                    setShowNewForm(false);
+                    setNewAddress(EMPTY_ADDRESS_FORM);
+                  }}
+                  submitLabel="Save Address"
+                  saving={savingAddress}
+                  existingAddresses={savedAddresses}
                 />
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="City *"
-                    value={newAddress.city}
-                    onChange={(e) => setNewAddress((p) => ({ ...p, city: e.target.value }))}
-                    className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-section text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Pincode"
-                    value={newAddress.pincode}
-                    onChange={(e) => setNewAddress((p) => ({ ...p, pincode: e.target.value }))}
-                    className="w-28 border border-border rounded-lg px-3 py-2 text-sm bg-section text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <button
-                  onClick={handleSaveNewAddress}
-                  disabled={savingAddress}
-                  className="w-full py-2 bg-primary hover:bg-primary-hover text-white text-sm font-semibold rounded-lg transition disabled:opacity-60"
-                >
-                  {savingAddress ? "Saving…" : "Save Address"}
-                </button>
               </div>
             )}
 
@@ -317,6 +352,41 @@ const CartPage = () => {
                 No saved addresses.{" "}
                 <button onClick={() => setShowNewForm(true)} className="text-primary hover:underline">Add one</button>
               </p>
+            )}
+          </div>
+
+          {/* Delivery options */}
+          <div className="bg-white/60 dark:bg-[#1A1A1A]/60 backdrop-blur-xl rounded-3xl shadow-sm border border-white/60 dark:border-white/5 p-6 md:p-8 space-y-4">
+            <h3 className="font-semibold text-foreground text-sm">Delivery options</h3>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={contactless}
+                onChange={(e) => setContactless(e.target.checked)}
+                className="w-4 h-4 accent-primary rounded"
+              />
+              <span className="text-sm text-foreground">Contactless delivery</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useAltPhone}
+                onChange={(e) => setUseAltPhone(e.target.checked)}
+                className="w-4 h-4 accent-primary rounded"
+              />
+              <span className="text-sm text-foreground">Use alternate phone for this delivery</span>
+            </label>
+            {useAltPhone && (
+              <input
+                type="tel"
+                placeholder="10-digit mobile number"
+                value={deliveryPhone}
+                onChange={(e) => setDeliveryPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-section text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            )}
+            {!useAltPhone && user?.phone && (
+              <p className="text-xs text-muted-foreground">Delivery updates will go to {user.phone}</p>
             )}
           </div>
 
@@ -382,10 +452,13 @@ const CartPage = () => {
             <button
               className="mt-4 w-full bg-primary hover:bg-primary-hover disabled:opacity-60 text-white py-3 rounded-xl font-bold text-base transition shadow"
               onClick={handlePlaceOrder}
-              disabled={placing || (!selectedAddressId && !address.trim())}
+              disabled={placing || (!selectedAddressId && !address.trim()) || Boolean(serviceabilityMsg)}
             >
               {placing ? "Placing Order…" : `Place Order · ₹${Math.round(toPay)}`}
             </button>
+            {serviceabilityMsg && (
+              <p className="mt-3 text-sm text-red-500 font-medium">{serviceabilityMsg}</p>
+            )}
           </div>
           </>
           )}

@@ -156,6 +156,12 @@ const OrdersPage = () => {
                 {order.notes && (
                   <p className="text-xs text-muted-foreground truncate">📍 {order.notes}</p>
                 )}
+                {(order.contactless || order.deliveryPhone) && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {order.contactless && <span className="mr-2">🚪 Contactless</span>}
+                    {order.deliveryPhone && <span>📞 {order.deliveryPhone}</span>}
+                  </p>
+                )}
               </div>
 
               {/* Footer */}

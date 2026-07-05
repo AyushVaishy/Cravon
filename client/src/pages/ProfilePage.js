@@ -4,7 +4,18 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { performLogout } from "../utils/authHelpers";
 import { setCredentials } from "../store/authSlice";
-import { updateProfile, changePassword, getProfile, forgotPassword } from "../services/authService";
+import {
+  updateProfile,
+  changePassword,
+  getProfile,
+  forgotPassword,
+  uploadAvatar,
+  updateNotificationSettings,
+  requestEmailChange,
+  confirmEmailChange,
+  deleteAccount,
+  logoutAllDevices,
+} from "../services/authService";
 import { getOrders } from "../services/orderService";
 import { Link } from "react-router-dom";
 import {
@@ -14,10 +25,18 @@ import {
   FaCog, FaGoogle, FaFacebook, FaShieldAlt,
 } from "react-icons/fa";
 import { FiEdit2, FiSave, FiX } from "react-icons/fi";
-import { getAddresses, addAddress, deleteAddress } from "../services/addressService";
+import { getAddresses, addAddress, updateAddress, deleteAddress, setDefaultAddress } from "../services/addressService";
+import AddressForm, { EMPTY_ADDRESS_FORM } from "../components/AddressForm";
+import {
+  addressToForm,
+  validateAddressForm,
+  formToPayload,
+  defaultLabelTypeForNew,
+} from "../utils/addressLabels";
 import { selectFavourites } from "../store/favoritesSlice";
 import RestaurantCard from "../components/RestaurantCard";
 import { validatePassword, PASSWORD_HINT } from "../utils/passwordValidation";
+import { resolveAvatarUrl } from "../utils/avatarUrl";
 import api from "../services/api";
 
 const CARD =
@@ -52,10 +71,75 @@ const ProfileTab = ({ user, onUpdated }) => {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: user?.name || "", phone: user?.phone || "" });
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [emailStep, setEmailStep] = useState("idle"); // idle | request | confirm
+  const [newEmail, setNewEmail] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
+
+  const avatarUrl = resolveAvatarUrl(user?.avatar);
 
   useEffect(() => {
     setForm({ name: user?.name || "", phone: user?.phone || "" });
   }, [user]);
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image must be under 10 MB");
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      const res = await uploadAvatar(file);
+      onUpdated(res.data.user);
+      toast.success("Profile picture updated!");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to upload photo");
+    }
+    setUploadingAvatar(false);
+    e.target.value = "";
+  };
+
+  const handleRequestEmailChange = async () => {
+    if (!newEmail.trim()) {
+      toast.error("Enter a new email address");
+      return;
+    }
+    setEmailSaving(true);
+    try {
+      const res = await requestEmailChange(newEmail.trim());
+      toast.success(res.data.message || "Code sent to new email");
+      setEmailStep("confirm");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to send verification code");
+    }
+    setEmailSaving(false);
+  };
+
+  const handleConfirmEmailChange = async () => {
+    if (!/^\d{6}$/.test(emailCode.trim())) {
+      toast.error("Enter the 6-digit code");
+      return;
+    }
+    setEmailSaving(true);
+    try {
+      const res = await confirmEmailChange(emailCode.trim());
+      onUpdated(res.data.user);
+      setEmailStep("idle");
+      setNewEmail("");
+      setEmailCode("");
+      toast.success("Email updated successfully!");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Invalid or expired code");
+    }
+    setEmailSaving(false);
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error("Name is required"); return; }
@@ -84,12 +168,27 @@ const ProfileTab = ({ user, onUpdated }) => {
   return (
     <div className="max-w-lg space-y-6">
       <div className={`${CARD} p-6 flex items-center gap-5`}>
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-white text-3xl font-extrabold shadow-lg shadow-primary/20 flex-shrink-0">
-          {(user?.name || "U").charAt(0).toUpperCase()}
+        <div className="relative flex-shrink-0">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={user?.name || "Profile"}
+              className="w-20 h-20 rounded-2xl object-cover shadow-lg ring-2 ring-primary/20"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-white text-3xl font-extrabold shadow-lg shadow-primary/20">
+              {(user?.name || "U").charAt(0).toUpperCase()}
+            </div>
+          )}
+          <label className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center cursor-pointer shadow-md hover:bg-primary-hover transition">
+            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={uploadingAvatar} />
+            <FiEdit2 size={12} />
+          </label>
         </div>
         <div className="min-w-0">
           <h2 className="text-xl font-extrabold text-foreground truncate">{user?.name || "—"}</h2>
           <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
+          {uploadingAvatar && <p className="text-xs text-primary mt-1">Uploading photo…</p>}
           <div className="flex flex-wrap gap-2 mt-2">
             <span className="text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-semibold">
               {user?.role === "USER" ? "Customer" : user?.role?.replace("_", " ")}
@@ -173,6 +272,63 @@ const ProfileTab = ({ user, onUpdated }) => {
               <span className="text-sm text-foreground">{user?.phone || "Not set"}</span>
             </FieldRow>
           </>
+        )}
+      </div>
+
+      <div className={`${CARD} p-6 space-y-4`}>
+        <h3 className="font-bold text-foreground">Change email</h3>
+        <p className="text-sm text-muted-foreground">
+          We&apos;ll send a 6-digit code to your new email to confirm the change.
+        </p>
+        {emailStep === "idle" && (
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="New email address"
+              className={INPUT}
+            />
+            <button
+              type="button"
+              onClick={handleRequestEmailChange}
+              disabled={emailSaving}
+              className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold whitespace-nowrap disabled:opacity-60"
+            >
+              {emailSaving ? "Sending…" : "Send code"}
+            </button>
+          </div>
+        )}
+        {emailStep === "confirm" && (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">Code sent to <strong>{newEmail}</strong></p>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={emailCode}
+              onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ""))}
+              placeholder="6-digit code"
+              className={INPUT}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleConfirmEmailChange}
+                disabled={emailSaving}
+                className="flex-1 bg-primary text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-60"
+              >
+                {emailSaving ? "Verifying…" : "Confirm new email"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEmailStep("idle"); setEmailCode(""); }}
+                className="px-4 py-2.5 border border-border rounded-xl text-sm text-muted-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -336,11 +492,12 @@ const ReviewsTab = () => {
 const LABEL_ICONS = { Home: <FaHome />, Work: <FaBriefcase />, Other: <FaMapPin /> };
 
 const AddressesTab = () => {
+  const user = useSelector((s) => s.auth.user);
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [mode, setMode] = useState(null); // null | "add" | addressId (edit)
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ label: "Home", street: "", city: "", state: "", pincode: "" });
+  const [form, setForm] = useState(EMPTY_ADDRESS_FORM);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -352,28 +509,65 @@ const AddressesTab = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!form.street.trim() || !form.city.trim() || !form.state.trim() || !form.pincode.trim()) {
-      toast.error("All fields are required"); return;
+  const resetForm = () => {
+    setMode(null);
+    setForm(EMPTY_ADDRESS_FORM);
+  };
+
+  const validateForm = () => {
+    const err = validateAddressForm(form, addresses, mode === "add" ? null : mode);
+    if (err) {
+      toast.error(err);
+      return false;
     }
+    return true;
+  };
+
+  const payloadFromForm = () => formToPayload(form);
+
+  const handleSave = async () => {
+    if (!validateForm()) return;
     setSaving(true);
     try {
-      await addAddress(form);
-      toast.success("Address added!");
-      setShowForm(false);
-      setForm({ label: "Home", street: "", city: "", state: "", pincode: "" });
+      if (mode === "add") {
+        await addAddress({
+          ...payloadFromForm(),
+          isDefault: addresses.length === 0,
+        });
+        toast.success("Address added!");
+      } else if (mode) {
+        await updateAddress(mode, payloadFromForm());
+        toast.success("Address updated!");
+      }
+      resetForm();
       load();
-    } catch {
-      toast.error("Failed to add address");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to save address");
     }
     setSaving(false);
   };
 
+  const handleEdit = (addr) => {
+    setMode(addr.id);
+    setForm(addressToForm(addr));
+  };
+
+  const handleSetDefault = async (id) => {
+    try {
+      await setDefaultAddress(id);
+      toast.success("Default address updated");
+      load();
+    } catch {
+      toast.error("Failed to set default address");
+    }
+  };
+
   const handleDelete = async (id) => {
+    if (!window.confirm("Remove this address?")) return;
     try {
       await deleteAddress(id);
       toast.success("Address removed");
+      if (mode === id) resetForm();
       setAddresses((prev) => prev.filter((a) => a.id !== id));
     } catch {
       toast.error("Failed to delete address");
@@ -384,91 +578,107 @@ const AddressesTab = () => {
 
   return (
     <div className="max-w-lg space-y-4">
-      {/* Address cards */}
-      {addresses.length === 0 && !showForm && (
+      {addresses.length === 0 && mode !== "add" && (
         <div className="flex flex-col items-center py-12 text-muted-foreground">
           <FaMapMarkerAlt size={40} className="mb-3 text-muted-foreground" />
           <p className="font-medium">No saved addresses</p>
         </div>
       )}
-      {addresses.map((addr) => (
-        <div key={addr.id} className="flex items-start justify-between bg-white/80 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-2xl p-5 shadow-sm">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-              {LABEL_ICONS[addr.label] || <FaMapPin />}
-            </div>
-            <div>
-              <p className="font-semibold text-sm text-foreground">{addr.label}</p>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                {[addr.street, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ")}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => handleDelete(addr.id)}
-            className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
-            aria-label="Delete address"
-          >
-            <FaTrash size={13} />
-          </button>
-        </div>
-      ))}
 
-      {/* Add Address Form */}
-      {showForm ? (
-        <form onSubmit={handleAdd} className="bg-white/80 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-2xl p-5 space-y-3 shadow-sm">
-          <h3 className="font-semibold text-foreground text-sm mb-2">Add New Address</h3>
-          {/* Label selector */}
-          <div className="flex gap-2">
-            {["Home", "Work", "Other"].map((lbl) => (
-              <button
-                key={lbl}
-                type="button"
-                onClick={() => setForm((p) => ({ ...p, label: lbl }))}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${form.label === lbl
-                    ? "bg-primary/50 text-white border-primary"
-                    : "border-border text-muted-foreground hover:border-primary/40"
-                  }`}
-              >
-                {lbl}
-              </button>
-            ))}
+      {addresses.map((addr) =>
+        mode === addr.id ? null : (
+          <div
+            key={addr.id}
+            className={`flex items-start justify-between rounded-2xl p-5 shadow-sm border ${
+              addr.isDefault
+                ? "border-primary/50 bg-primary/5 dark:bg-primary/10"
+                : "border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-black/20"
+            }`}
+          >
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                {LABEL_ICONS[addr.label] || <FaMapPin />}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-sm text-foreground">{addr.label}</p>
+                  {addr.isDefault && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide bg-primary text-white px-2 py-0.5 rounded-full">
+                      Default
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  {[addr.street, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ")}
+                </p>
+                {(addr.contactName || addr.contactPhone) && (
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    📞 {addr.contactName || "—"}
+                    {addr.contactPhone ? ` · ${addr.contactPhone}` : ""}
+                  </p>
+                )}
+                {addr.lat && addr.lng && !(addr.lat === 0 && addr.lng === 0) && (
+                  <p className="text-[10px] text-muted-foreground/80 mt-1">📍 Location pinned</p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-1 ml-2 shrink-0">
+              {!addr.isDefault && (
+                <button
+                  type="button"
+                  onClick={() => handleSetDefault(addr.id)}
+                  className="text-[11px] font-semibold text-primary hover:underline whitespace-nowrap"
+                >
+                  Make default
+                </button>
+              )}
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleEdit(addr)}
+                  className="text-muted-foreground hover:text-primary p-1.5 hover:bg-primary/10 rounded-lg transition"
+                  aria-label="Edit address"
+                >
+                  <FiEdit2 size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(addr.id)}
+                  className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                  aria-label="Delete address"
+                >
+                  <FaTrash size={13} />
+                </button>
+              </div>
+            </div>
           </div>
-          {[
-            { field: "street", placeholder: "Street / Area" },
-            { field: "city", placeholder: "City" },
-            { field: "state", placeholder: "State" },
-            { field: "pincode", placeholder: "Pincode" },
-          ].map(({ field, placeholder }) => (
-            <input
-              key={field}
-              type="text"
-              placeholder={placeholder}
-              value={form[field]}
-              onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:ring-2 focus:ring-primary outline-none"
-            />
-          ))}
-          <div className="flex gap-2 pt-1">
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 bg-primary/50 hover:bg-primary-hover disabled:opacity-60 text-white py-2 rounded-lg font-semibold text-sm transition"
-            >
-              {saving ? "Saving…" : "Save Address"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="px-4 py-2 border border-border rounded-lg text-sm text-muted-foreground hover:bg-muted transition"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+        )
+      )}
+
+      {mode ? (
+        <AddressForm
+          title={mode === "add" ? "Add New Address" : "Edit Address"}
+          value={form}
+          onChange={setForm}
+          onSubmit={handleSave}
+          onCancel={resetForm}
+          submitLabel={mode === "add" ? "Save Address" : "Update Address"}
+          saving={saving}
+          existingAddresses={addresses}
+          editingId={mode === "add" ? null : mode}
+        />
       ) : (
         <button
-          onClick={() => setShowForm(true)}
+          type="button"
+          onClick={() => {
+            setMode("add");
+            setForm({
+              ...EMPTY_ADDRESS_FORM,
+              labelType: defaultLabelTypeForNew(addresses),
+              contactName: user?.name || "",
+              contactPhone: user?.phone || "",
+            });
+          }}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-primary/40 dark:border-primary/30 text-primary hover:bg-primary/5 dark:hover:bg-primary/5 font-semibold text-sm transition"
         >
           <FaPlus size={12} /> Add New Address
@@ -479,14 +689,104 @@ const AddressesTab = () => {
 };
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
+const NotificationToggle = ({ label, description, checked, onChange }) => (
+  <div className="flex items-center justify-between gap-4 py-3 border-b border-border/60 last:border-0">
+    <div>
+      <p className="text-sm font-semibold text-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{description}</p>
+    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`w-12 h-7 rounded-full transition-colors relative flex-shrink-0 ${checked ? "bg-primary" : "bg-muted-foreground/30"}`}
+    >
+      <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
+    </button>
+  </div>
+);
+
 const SettingsTab = ({ user, onUpdated, onLogout }) => {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [saving, setSaving] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletePhrase, setDeletePhrase] = useState("");
+  const [notif, setNotif] = useState({
+    notifyEmailOrders: user?.notifyEmailOrders ?? true,
+    notifyEmailOffers: user?.notifyEmailOffers ?? true,
+    notifyPushOrders: user?.notifyPushOrders ?? true,
+    notifyPushOffers: user?.notifyPushOffers ?? false,
+  });
+  const [notifSaving, setNotifSaving] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
 
   const hasPassword = Boolean(user?.hasPassword);
   const canResetByEmail = user?.email && !user.email.endsWith("@facebook.cravon.local");
+
+  useEffect(() => {
+    setNotif({
+      notifyEmailOrders: user?.notifyEmailOrders ?? true,
+      notifyEmailOffers: user?.notifyEmailOffers ?? true,
+      notifyPushOrders: user?.notifyPushOrders ?? true,
+      notifyPushOffers: user?.notifyPushOffers ?? false,
+    });
+  }, [user]);
+
+  const saveNotifications = async (next) => {
+    setNotif(next);
+    setNotifSaving(true);
+    try {
+      const res = await updateNotificationSettings(next);
+      onUpdated(res.data.user);
+      toast.success("Notification preferences saved");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to save preferences");
+      setNotif({
+        notifyEmailOrders: user?.notifyEmailOrders ?? true,
+        notifyEmailOffers: user?.notifyEmailOffers ?? true,
+        notifyPushOrders: user?.notifyPushOrders ?? true,
+        notifyPushOffers: user?.notifyPushOffers ?? false,
+      });
+    }
+    setNotifSaving(false);
+  };
+
+  const handleLogoutAll = async () => {
+    if (!window.confirm("Log out from all devices? You'll need to sign in again everywhere.")) return;
+    setLoggingOutAll(true);
+    try {
+      await logoutAllDevices();
+      await performLogout(dispatch);
+      toast.success("Logged out from all devices");
+      navigate("/");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to log out from all devices");
+    }
+    setLoggingOutAll(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("This permanently deletes your account, orders, and saved data. Continue?")) return;
+    setDeleting(true);
+    try {
+      const payload = hasPassword
+        ? { password: deletePassword }
+        : { confirmPhrase: deletePhrase };
+      await deleteAccount(payload);
+      await performLogout(dispatch);
+      toast.success("Account deleted");
+      navigate("/");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to delete account");
+    }
+    setDeleting(false);
+  };
 
   const toggleTheme = () => {
     const next = !isDark;
@@ -629,6 +929,38 @@ const SettingsTab = ({ user, onUpdated, onLogout }) => {
         )}
       </div>
 
+      {/* Notifications */}
+      <div className={`${CARD} p-6`}>
+        <h3 className="font-bold text-foreground mb-1">Notification settings</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Choose how you want to hear from Cravon.{notifSaving ? " Saving…" : ""}
+        </p>
+        <NotificationToggle
+          label="Email — order updates"
+          description="Confirmations, delivery status, receipts"
+          checked={notif.notifyEmailOrders}
+          onChange={(v) => saveNotifications({ ...notif, notifyEmailOrders: v })}
+        />
+        <NotificationToggle
+          label="Email — offers & coupons"
+          description="Deals, promos, and seasonal offers"
+          checked={notif.notifyEmailOffers}
+          onChange={(v) => saveNotifications({ ...notif, notifyEmailOffers: v })}
+        />
+        <NotificationToggle
+          label="Push — order updates"
+          description="Live order status in the browser"
+          checked={notif.notifyPushOrders}
+          onChange={(v) => saveNotifications({ ...notif, notifyPushOrders: v })}
+        />
+        <NotificationToggle
+          label="Push — offers & coupons"
+          description="Promotional alerts and flash sales"
+          checked={notif.notifyPushOffers}
+          onChange={(v) => saveNotifications({ ...notif, notifyPushOffers: v })}
+        />
+      </div>
+
       {/* Appearance */}
       <div className={`${CARD} p-6`}>
         <h3 className="font-bold text-foreground mb-4">Appearance</h3>
@@ -653,14 +985,56 @@ const SettingsTab = ({ user, onUpdated, onLogout }) => {
         </div>
       </div>
 
-      {/* Logout */}
-      <div className={`${CARD} p-6`}>
+      {/* Session */}
+      <div className={`${CARD} p-6 space-y-3`}>
+        <h3 className="font-bold text-foreground mb-2">Sessions</h3>
         <button
           type="button"
           onClick={onLogout}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition border border-red-200/80 dark:border-red-900/40"
         >
           <FaSignOutAlt size={14} /> Log out of this device
+        </button>
+        <button
+          type="button"
+          onClick={handleLogoutAll}
+          disabled={loggingOutAll}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-foreground hover:bg-muted/60 transition border border-border disabled:opacity-60"
+        >
+          {loggingOutAll ? "Signing out everywhere…" : "Log out from all devices"}
+        </button>
+      </div>
+
+      {/* Delete account */}
+      <div className={`${CARD} p-6 border-red-200/60 dark:border-red-900/40`}>
+        <h3 className="font-bold text-red-600 dark:text-red-400 mb-1">Delete account</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Permanently remove your account and all associated data. This cannot be undone.
+        </p>
+        {hasPassword ? (
+          <input
+            type="password"
+            placeholder="Enter your password to confirm"
+            value={deletePassword}
+            onChange={(e) => setDeletePassword(e.target.value)}
+            className={`${INPUT} mb-3`}
+          />
+        ) : (
+          <input
+            type="text"
+            placeholder='Type DELETE MY ACCOUNT to confirm'
+            value={deletePhrase}
+            onChange={(e) => setDeletePhrase(e.target.value)}
+            className={`${INPUT} mb-3`}
+          />
+        )}
+        <button
+          type="button"
+          onClick={handleDeleteAccount}
+          disabled={deleting}
+          className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white py-2.5 rounded-xl text-sm font-semibold transition"
+        >
+          {deleting ? "Deleting…" : "Delete my account permanently"}
         </button>
       </div>
     </div>
@@ -712,9 +1086,17 @@ const ProfilePage = () => {
         <aside className="w-full lg:w-72 flex-shrink-0">
           <div className={`${CARD} overflow-hidden`}>
             <div className="bg-gradient-to-br from-primary via-primary to-primary-hover px-5 py-7 text-center">
-              <div className="w-[4.5rem] h-[4.5rem] rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-extrabold mx-auto mb-3 ring-2 ring-white/30 shadow-lg">
-                {(user?.name || "U").charAt(0).toUpperCase()}
-              </div>
+              {resolveAvatarUrl(user?.avatar) ? (
+                <img
+                  src={resolveAvatarUrl(user?.avatar)}
+                  alt={user?.name || "Profile"}
+                  className="w-[4.5rem] h-[4.5rem] rounded-2xl object-cover mx-auto mb-3 ring-2 ring-white/30 shadow-lg"
+                />
+              ) : (
+                <div className="w-[4.5rem] h-[4.5rem] rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-extrabold mx-auto mb-3 ring-2 ring-white/30 shadow-lg">
+                  {(user?.name || "U").charAt(0).toUpperCase()}
+                </div>
+              )}
               <p className="text-white font-bold text-sm truncate">{user?.name || "Loading…"}</p>
               <p className="text-white/75 text-xs truncate mt-0.5">{user?.email}</p>
             </div>

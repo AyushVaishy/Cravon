@@ -177,4 +177,27 @@ const sendVerificationOtpEmail = async ({ to, name, code }) => {
   return deliverEmail({ to, subject, html, text, consoleLabel: "EMAIL VERIFICATION OTP", consoleDetail: `Code: ${code}` });
 };
 
-module.exports = { sendPasswordResetEmail, sendVerificationOtpEmail };
+const buildEmailChangeOtpHtml = ({ name, code, newEmail }) =>
+  emailShell({
+    title: `Confirm your new ${APP_NAME} email`,
+    bodyHtml: `
+      <h2 style="margin:0 0 12px;color:#18181b;font-size:22px;font-weight:700;">Confirm email change</h2>
+      <p style="margin:0 0 20px;color:#52525b;font-size:15px;line-height:1.6;">
+        Hi ${name || "there"},<br /><br />
+        Use this code to change your ${APP_NAME} email to <strong>${newEmail}</strong>. It expires in <strong>10 minutes</strong>.
+      </p>
+      <div style="margin:28px 0;text-align:center;">
+        <span style="display:inline-block;letter-spacing:8px;font-size:32px;font-weight:800;color:#18181b;background:#f4f4f5;border-radius:12px;padding:16px 28px;border:2px dashed ${BRAND_COLOR};">
+          ${code}
+        </span>
+      </div>`,
+  });
+
+const sendEmailChangeOtpEmail = async ({ to, name, code, newEmail }) => {
+  const subject = `${code} — confirm your new ${APP_NAME} email`;
+  const html = buildEmailChangeOtpHtml({ name, code, newEmail });
+  const text = `Hi ${name || "there"},\n\nConfirm changing your email to ${newEmail} with code: ${code}\n\nExpires in 10 minutes.`;
+  return deliverEmail({ to, subject, html, text, consoleLabel: "EMAIL CHANGE OTP", consoleDetail: `Code: ${code} → ${newEmail}` });
+};
+
+module.exports = { sendPasswordResetEmail, sendVerificationOtpEmail, sendEmailChangeOtpEmail };

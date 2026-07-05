@@ -3,6 +3,7 @@ const {
   getRestaurants,
   getRestaurant,
   searchRestaurants,
+  getTrendingSearches,
   createRestaurant,
   updateRestaurant,
   getMyRestaurants,
@@ -13,6 +14,7 @@ const { getReviews, deleteReview, getMyReviews } = require("../controllers/revie
 const { authenticate, authorize } = require("../middleware/auth.middleware");
 
 router.get("/", getRestaurants);
+router.get("/search/trending", getTrendingSearches);
 router.get("/search", searchRestaurants);
 router.get("/my", authenticate, authorize("RESTAURANT_OWNER", "ADMIN"), getMyRestaurants);
 router.get("/reviews/me", authenticate, getMyReviews);
