@@ -39,26 +39,36 @@ const LeafletRecenter = ({ lat, lng }) => {
 const GoogleMapPicker = ({ lat, lng, onChange, apiKey }) => {
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+  const onChangeRef = useRef(onChange);
+  const coordsRef = useRef({ lat, lng });
+
+  onChangeRef.current = onChange;
+  coordsRef.current = { lat, lng };
 
   useEffect(() => {
     if (!window.google?.maps || !mapRef.current) return;
 
-    const center = lat && lng ? { lat, lng } : DEFAULT_CENTER;
+    const { lat: startLat, lng: startLng } = coordsRef.current;
+    const center = startLat && startLng ? { lat: startLat, lng: startLng } : DEFAULT_CENTER;
     const map = new window.google.maps.Map(mapRef.current, {
       center,
-      zoom: lat && lng ? 16 : 12,
+      zoom: startLat && startLng ? 16 : 12,
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
     });
 
     let marker = null;
-    if (lat && lng) {
-      marker = new window.google.maps.Marker({ position: center, map, draggable: true });
-      marker.addListener("dragend", () => {
-        const pos = marker.getPosition();
-        onChange(pos.lat(), pos.lng());
+    const bindDrag = (nextMarker) => {
+      nextMarker.addListener("dragend", () => {
+        const pos = nextMarker.getPosition();
+        onChangeRef.current(pos.lat(), pos.lng());
       });
+    };
+
+    if (startLat && startLng) {
+      marker = new window.google.maps.Marker({ position: center, map, draggable: true });
+      bindDrag(marker);
       markerRef.current = marker;
     }
 
@@ -66,21 +76,18 @@ const GoogleMapPicker = ({ lat, lng, onChange, apiKey }) => {
       const next = { lat: e.latLng.lat(), lng: e.latLng.lng() };
       if (!marker) {
         marker = new window.google.maps.Marker({ position: next, map, draggable: true });
-        marker.addListener("dragend", () => {
-          const pos = marker.getPosition();
-          onChange(pos.lat(), pos.lng());
-        });
+        bindDrag(marker);
         markerRef.current = marker;
       } else {
         marker.setPosition(next);
       }
-      onChange(next.lat, next.lng);
+      onChangeRef.current(next.lat, next.lng);
     });
 
     return () => {
       markerRef.current = null;
     };
-  }, [apiKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiKey]);
 
   useEffect(() => {
     if (!markerRef.current || !lat || !lng) return;
