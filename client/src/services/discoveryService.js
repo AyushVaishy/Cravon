@@ -4,3 +4,6 @@ export const getPromoBanners = () => api.get("/discovery/banners");
 
 export const getPopularDishes = (lat, lng, { limit = 16 } = {}) =>
   api.get("/discovery/dishes", { params: { lat, lng, limit } });
+
+export const getHomeFeed = (lat, lng, { radius } = {}) =>
+  api.get("/discovery/home-feed", { params: { lat, lng, radius } });

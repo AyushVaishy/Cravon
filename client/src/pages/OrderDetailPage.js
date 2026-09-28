@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import toast from "react-hot-toast";
-import { getOrder, cancelOrder, createReview as createReviewService } from "../services/orderService";
+import { getOrder, cancelOrder, createReview as createReviewService, rateMenuItems } from "../services/orderService";
 import { addItem, clearCart } from "../store/cartSlice";
 import { addNotification } from "../store/notificationsSlice";
 import { FaArrowLeft, FaStar, FaMapMarkerAlt, FaBoxOpen, FaMotorcycle, FaPhoneAlt } from "react-icons/fa";
@@ -41,12 +41,12 @@ const STATUS_MESSAGES = {
 const DELIVERY_DURATION_MS = 120000; // 2 minutes
 
 // ─── Star Rating Picker ───────────────────────────────────────────────────────
-const StarPicker = ({ value, onChange }) => (
+const StarPicker = ({ value, onChange, size = 24 }) => (
   <div className="flex gap-1">
     {[1, 2, 3, 4, 5].map((n) => (
       <button key={n} type="button" onClick={() => onChange(n)} className="focus:outline-none">
         <FaStar
-          size={24}
+          size={size}
           className={`transition-colors ${n <= value ? "text-yellow-400" : "text-muted-foreground"}`}
         />
       </button>
@@ -55,11 +55,21 @@ const StarPicker = ({ value, onChange }) => (
 );
 
 // ─── Review Form ─────────────────────────────────────────────────────────────
-const ReviewForm = ({ restaurantId, restaurantName, onReviewed }) => {
+const ReviewForm = ({ restaurantId, restaurantName, items = [], onReviewed }) => {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [itemRatings, setItemRatings] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  const dishes = [];
+  const seen = new Set();
+  items.forEach((line) => {
+    const id = line.menuItemId || line.menuItem?.id;
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    dishes.push({ id, name: line.menuItem?.name || "Item" });
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -67,6 +77,10 @@ const ReviewForm = ({ restaurantId, restaurantName, onReviewed }) => {
     setSubmitting(true);
     try {
       await createReviewService(restaurantId, { rating, comment });
+      const dishRatings = dishes
+        .filter((dish) => itemRatings[dish.id] > 0)
+        .map((dish) => ({ menuItemId: dish.id, rating: itemRatings[dish.id] }));
+      if (dishRatings.length > 0) await rateMenuItems(dishRatings);
       toast.success("Review submitted! Thank you 🙏");
       setSubmitted(true);
       if (onReviewed) onReviewed({ rating, comment });
@@ -91,6 +105,21 @@ const ReviewForm = ({ restaurantId, restaurantName, onReviewed }) => {
     <form onSubmit={handleSubmit} className="space-y-4">
       <h3 className="font-bold text-foreground">Rate your experience at {restaurantName}</h3>
       <StarPicker value={rating} onChange={setRating} />
+      {dishes.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-foreground">Rate the dishes</p>
+          {dishes.map((dish) => (
+            <div key={dish.id} className="flex items-center justify-between gap-3">
+              <span className="text-sm text-foreground truncate">{dish.name}</span>
+              <StarPicker
+                size={16}
+                value={itemRatings[dish.id] || 0}
+                onChange={(n) => setItemRatings((prev) => ({ ...prev, [dish.id]: n }))}
+              />
+            </div>
+          ))}
+        </div>
+      )}
       <textarea
         value={comment}
         onChange={(e) => setComment(e.target.value)}
@@ -477,6 +506,7 @@ const OrderDetailPage = () => {
             <ReviewForm
               restaurantId={order.restaurantId}
               restaurantName={order.restaurant?.name}
+              items={order.items}
             />
           </div>
         )}

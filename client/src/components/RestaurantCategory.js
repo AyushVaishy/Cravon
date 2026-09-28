@@ -2,7 +2,7 @@ import { useState } from "react";
 import ItemList from "./ItemList";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
 
-const RestaurantCategory = ({ title, items, restaurantName }) => {
+const RestaurantCategory = ({ title, items, restaurantName, restaurantId, orderingDisabled }) => {
   const [open, setOpen] = useState(true);
 
   return (
@@ -23,7 +23,7 @@ const RestaurantCategory = ({ title, items, restaurantName }) => {
       </button>
       {open && (
         <div className="border-t border-border px-4 py-2">
-          <ItemList items={items} restaurantName={restaurantName} />
+          <ItemList items={items} restaurantName={restaurantName} restaurantId={restaurantId} orderingDisabled={orderingDisabled} />
         </div>
       )}
     </div>

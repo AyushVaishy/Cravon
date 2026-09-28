@@ -1,5 +1,6 @@
 export const RECENT_SEARCHES_KEY = "cravon_recent_searches";
-const MAX_RECENT = 8;
+const MAX_DROPDOWN = 8;
+const MAX_HISTORY = 50;
 
 export const loadRecentSearches = () => {
   try {
@@ -11,11 +12,13 @@ export const loadRecentSearches = () => {
   }
 };
 
+export const loadSearchHistory = () => loadRecentSearches();
+
 export const addRecentSearch = (query) => {
   const q = String(query || "").trim();
   if (!q) return loadRecentSearches();
   const prev = loadRecentSearches().filter((s) => s.toLowerCase() !== q.toLowerCase());
-  const next = [q, ...prev].slice(0, MAX_RECENT);
+  const next = [q, ...prev].slice(0, MAX_HISTORY);
   try {
     localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
   } catch {
@@ -23,6 +26,8 @@ export const addRecentSearch = (query) => {
   }
   return next;
 };
+
+export const getDropdownRecentSearches = () => loadRecentSearches().slice(0, MAX_DROPDOWN);
 
 export const removeRecentSearch = (query) => {
   const next = loadRecentSearches().filter((s) => s !== query);

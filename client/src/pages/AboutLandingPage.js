@@ -4,12 +4,19 @@ import LandingLayout from "../components/landing/LandingLayout";
 const AboutLandingPage = () => {
   return (
     <LandingLayout>
-      <div className="pb-24 pt-32">
-        <div className="mx-auto max-w-7xl px-6 md:px-8">
+      <div className="landing-page-hero pt-28">
+        <div className="mx-auto max-w-7xl px-5 md:px-8">
+          <p className="mb-3 font-display text-sm font-semibold tracking-[0.22em] text-[#E31837] uppercase">
+            — About —
+          </p>
+        </div>
+      </div>
+      <div className="pb-24">
+        <div className="mx-auto max-w-7xl px-5 md:px-8">
           <div className="mb-28 grid grid-cols-1 items-center gap-20 lg:grid-cols-2">
             <div className="space-y-8">
-              <h1 className="text-5xl font-bold leading-tight text-app-primary md:text-7xl">
-                Our mission is to <span className="text-brand">simplify</span> how the world eats.
+              <h1 className="font-display text-5xl font-extrabold leading-tight tracking-tight text-[#1F1F1F] dark:text-white md:text-7xl">
+                Our mission is to <span className="text-[#FF7A1A]">simplify</span> how the world eats.
               </h1>
               <p className="text-lg leading-relaxed text-app-secondary">
                 We started Cravon to reduce decision fatigue in food ordering. Instead of endless scrolling,

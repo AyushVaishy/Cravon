@@ -3,6 +3,9 @@ import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { setCredentials } from "../store/authSlice";
+import { setCart } from "../store/cartSlice";
+import { mergeCartOnLogin } from "../utils/cartSync";
+import appStore from "../store/appStore";
 import { login, signup, forgotPassword, verifyEmail, resendVerification } from "../services/authService";
 import { validatePassword, PASSWORD_HINT } from "../utils/passwordValidation";
 import { FaTimes, FaEye, FaEyeSlash } from "react-icons/fa";
@@ -152,6 +155,8 @@ const SignInSidebar = ({ isOpen, onClose, onSignIn, initialTab = "login" }) => {
     localStorage.setItem("accessToken", accessToken);
     localStorage.setItem("userData", JSON.stringify(user));
     dispatch(setCredentials({ user, accessToken }));
+    const localCart = appStore.getState().cart.items;
+    mergeCartOnLogin(localCart, dispatch, setCart);
   };
 
   const handleGoogleAuth = (role = "USER") => {

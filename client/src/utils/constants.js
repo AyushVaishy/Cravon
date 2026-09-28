@@ -692,7 +692,7 @@ export const support_data = [
         id: 100055,
         title: "Is single order from many restaurants possible?",
         description:
-          "We currently do not support this functionality. However, you can place orders for individual items from different restaurants.",
+          "Yes! You can add items from multiple restaurants to one cart. At checkout, choose to place all orders together or checkout each restaurant separately.",
         conversationId: null,
         layerConversationId: null,
         ackText: null,

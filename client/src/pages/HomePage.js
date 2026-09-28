@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { applyFilters, clearFilters, toggleVeg } from "../store/filtersSlice";
+import { applyFilters, clearFilters, togglePureVeg, toggleNonVeg, toggleOpenNow, toggleHasOffers, toggleNewRestaurants } from "../store/filtersSlice";
 import { toggleFavourite, selectIsFavourite } from "../store/favoritesSlice";
 import useOnlineStatus from "../hooks/useOnlineStatus";
 import { getRestaurants } from "../services/restaurantService";
@@ -10,15 +10,15 @@ import { selectRecentlyViewed } from "../store/recentlyViewedSlice";
 import FilterModal from "../components/FilterModal";
 import {
   FaChevronLeft, FaChevronRight, FaLeaf, FaSlidersH,
-  FaClock, FaStar, FaHeart, FaRegHeart, FaMapMarkerAlt,
+  FaStar, FaHeart, FaRegHeart, FaBolt,
 } from "react-icons/fa";
-import { ShimmerCategories, ShimmerBrands, ShimmerCarousel, ShimmerGridCards } from "../components/Shimmer";
-import HomeDiscoverSections from "../components/home/HomeDiscoverSections";
+import { ShimmerCategories, ShimmerGridCards, ShimmerBanner, ShimmerDishes, ShimmerCarousel } from "../components/Shimmer";
 import DashboardFooter from "../components/dashboard/DashboardFooter";
 import PromoBannerCarousel from "../components/home/PromoBannerCarousel";
 import DishCarousel from "../components/home/DishCarousel";
-import CuratedCollections from "../components/home/CuratedCollections";
-import { buildCollections } from "../data/homeFeed";
+import { useHomeFeed, OrderAgainSection, FeaturedSection } from "../components/home/HomeDiscoverFeed";
+import { ErrorPageView } from "../components/Error";
+import RestaurantCard from "../components/RestaurantCard";
 import { RestaurantStatusBadges } from "../utils/restaurantDisplay";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -29,18 +29,18 @@ const RADIUS = BROWSE_RADIUS_KM;
 const LIMIT  = 20;
 
 const FOOD_CATEGORIES = [
-  { id: 1,  name: "Biryani",      query: "Biryani",      imageUrl: "https://images.unsplash.com/photo-1563379091339-3b21bbd4c4e3?w=200&h=200&fit=crop" },
-  { id: 2,  name: "Pizza",        query: "Pizza",         imageUrl: "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=200&h=200&fit=crop" },
-  { id: 3,  name: "Burgers",      query: "Burger",        imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&h=200&fit=crop" },
-  { id: 4,  name: "South Indian", query: "South Indian",  imageUrl: "https://images.unsplash.com/photo-1567337710282-00832b415979?w=200&h=200&fit=crop" },
-  { id: 5,  name: "Chinese",      query: "Chinese",       imageUrl: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=200&h=200&fit=crop" },
-  { id: 6,  name: "North Indian", query: "North Indian",  imageUrl: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=200&h=200&fit=crop" },
-  { id: 7,  name: "Desserts",     query: "Desserts",      imageUrl: "https://images.unsplash.com/photo-1551024506-0bccd828d307?w=200&h=200&fit=crop" },
-  { id: 8,  name: "Rolls",        query: "Rolls",         imageUrl: "https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=200&h=200&fit=crop" },
-  { id: 9,  name: "Ice Cream",    query: "Ice Cream",     imageUrl: "https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=200&h=200&fit=crop" },
-  { id: 10, name: "Sandwiches",   query: "Sandwich",      imageUrl: "https://images.unsplash.com/photo-1528735602780-2ba8f1ee5a02?w=200&h=200&fit=crop" },
-  { id: 11, name: "Healthy",      query: "Healthy",       imageUrl: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=200&fit=crop" },
-  { id: 12, name: "Cakes",        query: "Cake",          imageUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=200&h=200&fit=crop" },
+  { id: 1,  name: "Biryani",      query: "Biryani",      imageUrl: "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=280&h=280&fit=crop" },
+  { id: 2,  name: "Pizza",        query: "Pizza",         imageUrl: "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=280&h=280&fit=crop" },
+  { id: 3,  name: "Burgers",      query: "Burger",        imageUrl: "https://images.unsplash.com/photo-1550547660-d9450f859349?w=280&h=280&fit=crop" },
+  { id: 4,  name: "South Indian", query: "South Indian",  imageUrl: "https://images.unsplash.com/photo-1630383249896-424e482df921?w=280&h=280&fit=crop" },
+  { id: 5,  name: "Chinese",      query: "Chinese",       imageUrl: "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=280&h=280&fit=crop" },
+  { id: 6,  name: "North Indian", query: "North Indian",  imageUrl: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=280&h=280&fit=crop" },
+  { id: 7,  name: "Desserts",     query: "Desserts",      imageUrl: "https://images.unsplash.com/photo-1551024506-0bccd828d307?w=280&h=280&fit=crop" },
+  { id: 8,  name: "Rolls",        query: "Rolls",         imageUrl: "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=280&h=280&fit=crop" },
+  { id: 9,  name: "Ice Cream",    query: "Ice Cream",     imageUrl: "https://images.unsplash.com/photo-1497034825429-c343d7c6a68f?w=280&h=280&fit=crop" },
+  { id: 10, name: "Sandwiches",   query: "Sandwich",      imageUrl: "https://images.unsplash.com/photo-1528735602780-2ba8f1ee5a02?w=280&h=280&fit=crop" },
+  { id: 11, name: "Healthy",      query: "Healthy",       imageUrl: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=280&h=280&fit=crop" },
+  { id: 12, name: "Cakes",        query: "Cake",          imageUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=280&h=280&fit=crop" },
 ];
 
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop";
@@ -82,7 +82,7 @@ const CarouselArrow = ({ direction, onClick }) => (
   <button
     onClick={onClick}
     aria-label={`Scroll ${direction}`}
-    className="glass-icon-btn w-9 h-9 rounded-full flex items-center justify-center hover:scale-110 transition-transform duration-200 shrink-0"
+    className="elevated-icon-btn w-9 h-9 rounded-xl flex items-center justify-center hover:scale-105 hover:text-primary transition-all duration-200 shrink-0"
   >
     {direction === "left"
       ? <FaChevronLeft  className="text-foreground/70" size={12} />
@@ -90,13 +90,25 @@ const CarouselArrow = ({ direction, onClick }) => (
   </button>
 );
 
-const SectionHeader = ({ title, subtitle, right }) => (
-  <div className="flex items-end justify-between mb-5 sm:mb-6">
-    <div>
-      <h2 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">{title}</h2>
-      {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
+const SectionHeader = ({ title, subtitle, right, viewAllTo }) => (
+  <div className="flex items-end justify-between mb-5 sm:mb-6 gap-3">
+    <div className="min-w-0">
+      <h2 className="font-display text-lg sm:text-xl font-extrabold text-foreground leading-tight">
+        {title}
+      </h2>
+      {subtitle && <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
     </div>
-    {right && <div className="hidden sm:flex gap-2">{right}</div>}
+    <div className="flex items-center gap-2 shrink-0">
+      {right && <div className="hidden sm:flex gap-2">{right}</div>}
+      {viewAllTo && (
+        <Link
+          to={viewAllTo}
+          className="text-xs sm:text-sm font-bold text-primary hover:text-primary-hover flex items-center gap-0.5 transition-colors whitespace-nowrap"
+        >
+          View all <FaChevronRight size={10} />
+        </Link>
+      )}
+    </div>
   </div>
 );
 
@@ -109,57 +121,37 @@ const FilterTag = ({ label, onRemove }) => (
 
 // ─── Category Circle ──────────────────────────────────────────────────────────
 
-const CategoryCircle = ({ cat, onClick }) => (
+const CategoryCard = ({ cat, onClick }) => (
   <button
     onClick={onClick}
-    className="flex flex-col items-center min-w-[90px] sm:min-w-[100px] group focus:outline-none"
+    className="relative flex flex-col items-center min-w-[100px] sm:min-w-[112px] w-[100px] sm:w-[112px] group focus:outline-none bg-transparent border-0 p-0 overflow-visible"
   >
-    <div className="glass-circle w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden mb-2.5 group-hover:scale-[1.08] group-hover:shadow-glow transition-all duration-300">
+    <div className="relative w-[88px] h-[88px] sm:w-[100px] sm:h-[100px] mb-2.5 overflow-visible flex items-end justify-center">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-0.5 w-[58%] h-2 rounded-[100%] bg-black/15 blur-[4px] group-hover:w-[68%] group-hover:bg-black/20 transition-all duration-250"
+      />
       <img
         src={cat.imageUrl}
         alt={cat.name}
         loading="lazy"
-        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-        onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=200&h=200&fit=crop"; }}
+        className="relative z-[1] w-full h-full object-cover rounded-full border-0 outline-none ring-0
+          shadow-[0_10px_22px_-6px_rgba(0,0,0,0.22)]
+          group-hover:scale-105 group-hover:-translate-y-1
+          group-hover:shadow-[0_14px_28px_-6px_rgba(0,0,0,0.28)]
+          transition-all duration-250 ease-out"
+        onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=280&h=280&fit=crop"; }}
       />
     </div>
-    <span className="text-xs sm:text-sm font-semibold text-foreground text-center group-hover:text-primary transition-colors leading-tight">
+    <span className="relative z-[2] text-xs sm:text-[13px] font-bold text-foreground text-center group-hover:text-primary transition-colors leading-tight line-clamp-1 w-full">
       {cat.name}
     </span>
   </button>
 );
 
-// ─── Brand Circle ──────────────────────────────────────────────────────────────
+// ─── Brand Circle removed (Top Brands section dropped for leaner home feed) ───
 
-const BrandCircle = ({ restaurant }) => {
-  const navigate = useNavigate();
-  return (
-    <button
-      onClick={() => navigate(`/home/restaurants/${restaurant.id}`)}
-      className="flex flex-col items-center min-w-[110px] sm:min-w-[130px] group focus:outline-none"
-    >
-      <div className="relative glass-circle w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden mb-2.5 group-hover:scale-[1.07] group-hover:shadow-glow transition-all duration-300">
-        <img
-          src={restaurant.imageUrl || PLACEHOLDER_IMG}
-          alt={restaurant.name}
-          loading="lazy"
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-          onError={(e) => { e.target.src = PLACEHOLDER_IMG; }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-      </div>
-      <p className="text-xs sm:text-sm font-bold text-foreground text-center line-clamp-1 group-hover:text-primary transition-colors w-full px-1">
-        {restaurant.name}
-      </p>
-      <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-        <FaClock size={9} /> {restaurant.deliveryTime ?? 30} min
-      </p>
-    </button>
-  );
-};
-
-// ─── Glass Restaurant Card (carousel) ─────────────────────────────────────────
-
+// ─── Restaurant Card (carousel) ───────────────────────────────────────────────
 const GlassRestaurantCard = ({ resData, wide = false }) => {
   const dispatch = useDispatch();
   const isFav    = useSelector(selectIsFavourite(resData.id));
@@ -177,103 +169,41 @@ const GlassRestaurantCard = ({ resData, wide = false }) => {
   return (
     <Link
       to={`/home/restaurants/${id}`}
-      className={`block glass-card rounded-3xl overflow-hidden group transition-all duration-300 hover:-translate-y-1 hover:shadow-glow-md ${
-        wide ? "min-w-[280px] sm:min-w-[300px]" : "min-w-[230px] sm:min-w-[260px]"
+      className={`block elevated-card overflow-hidden group ${
+        wide ? "min-w-[260px] sm:min-w-[280px]" : "min-w-[220px] sm:min-w-[240px]"
       }`}
     >
-      <div className="relative w-full h-[165px] overflow-hidden">
+      <div className="relative w-full h-[150px] overflow-hidden rounded-t-[20px]">
         <img
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           src={imageUrl || PLACEHOLDER_IMG}
           alt={name}
           onError={(e) => { e.target.src = PLACEHOLDER_IMG; }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
         <RestaurantStatusBadges resData={resData} />
-        <span className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-medium px-2 py-0.5 rounded-lg">
-          🚀 {deliveryTime ?? "30"} min
+        <span className="absolute bottom-2 left-2 bg-black/55 text-white text-[11px] font-semibold px-2 py-0.5 rounded-lg">
+          {deliveryTime ?? "30"} min
         </span>
         <button
           onClick={handleFav}
-          className="absolute top-2 right-2 w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center shadow hover:scale-110 transition-transform z-10"
+          className="absolute top-2 right-2 w-8 h-8 bg-white/90 dark:bg-black/50 rounded-full flex items-center justify-center shadow hover:scale-110 transition-transform z-10"
         >
-          {isFav ? <FaHeart className="text-red-400" size={13} /> : <FaRegHeart className="text-white" size={13} />}
+          {isFav ? <FaHeart className="text-[#FF5A5F]" size={12} /> : <FaRegHeart className="text-muted-foreground" size={12} />}
         </button>
       </div>
       <div className="p-3.5">
-        <h3 className="font-bold text-base text-foreground line-clamp-1 mb-1 group-hover:text-primary transition-colors">
+        <h3 className="font-bold text-[15px] text-foreground line-clamp-1 mb-1 group-hover:text-primary transition-colors">
           {name}
         </h3>
-        <div className="flex flex-wrap gap-1 mb-2.5">
-          {displayCuisines.map((c) => (
-            <span key={c} className="text-xs bg-white/20 dark:bg-white/5 text-muted-foreground px-1.5 py-0.5 rounded-md">{c}</span>
-          ))}
-        </div>
+        <p className="text-[11px] text-muted-foreground mb-2.5 truncate">
+          {displayCuisines.join(" · ")}
+        </p>
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1 text-sm font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-lg">
-            <FaStar size={10} /> {avgRating || "New"}
+          <span className="flex items-center gap-1 text-xs font-bold text-foreground">
+            <FaStar size={10} className="text-accent" /> {avgRating || "New"}
           </span>
-          <span className="text-xs text-muted-foreground">₹{Math.round((costForTwo || 0) / 100)} for two</span>
-        </div>
-      </div>
-    </Link>
-  );
-};
-
-// ─── Glass Grid Card (4-col grid) ─────────────────────────────────────────────
-
-const GlassGridCard = ({ resData }) => {
-  const dispatch = useDispatch();
-  const isFav    = useSelector(selectIsFavourite(resData.id));
-  const { id, name, cuisines, avgRating, costForTwo, deliveryTime, imageUrl, address } = resData;
-
-  const cuisineList = Array.isArray(cuisines) ? cuisines : (cuisines || "").split(",").map((c) => c.trim());
-
-  const handleFav = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dispatch(toggleFavourite(resData));
-  };
-
-  return (
-    <Link to={`/home/restaurants/${id}`} className="block">
-      <div className="glass-card rounded-2xl overflow-hidden group hover:-translate-y-1 hover:shadow-glow-md transition-all duration-300">
-        <div className="relative w-full h-[150px] overflow-hidden">
-          <img
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            src={imageUrl || PLACEHOLDER_IMG}
-            alt={name}
-            onError={(e) => { e.target.src = PLACEHOLDER_IMG; }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
-          <RestaurantStatusBadges resData={resData} />
-          <span className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-medium px-1.5 py-0.5 rounded-md">
-            🚀 {deliveryTime ?? "30"} min
-          </span>
-          <button
-            onClick={handleFav}
-            className="absolute top-2 right-2 w-7 h-7 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-110 transition-transform z-10"
-          >
-            {isFav ? <FaHeart className="text-red-400" size={12} /> : <FaRegHeart className="text-white" size={12} />}
-          </button>
-        </div>
-        <div className="p-3">
-          <h3 className="font-bold text-sm text-foreground line-clamp-1 mb-1 group-hover:text-primary transition-colors">{name}</h3>
-          {address && (
-            <p className="flex items-center gap-1 text-xs text-muted-foreground mb-1.5 truncate">
-              <FaMapMarkerAlt size={9} className="text-primary shrink-0" />
-              {typeof address === "string" ? address.split(",")[0] : ""}
-            </p>
-          )}
-          <p className="text-xs text-muted-foreground mb-2 truncate">
-            {cuisineList.slice(0, 2).join(" · ")}
-          </p>
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1 text-xs font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded">
-              <FaStar size={9} /> {avgRating || "New"}
-            </span>
-            <span className="text-xs text-muted-foreground">₹{Math.round((costForTwo || 0) / 100)} for two</span>
-          </div>
+          <span className="text-xs font-semibold text-primary">₹{Math.round((costForTwo || 0) / 100)} for two</span>
         </div>
       </div>
     </Link>
@@ -283,13 +213,13 @@ const GlassGridCard = ({ resData }) => {
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 
 const Section = ({ children, className = "" }) => (
-  <div className={`dashboard-section px-4 sm:px-6 py-8 ${className}`}>{children}</div>
+  <div className={`dashboard-section px-4 sm:px-6 lg:px-8 py-5 sm:py-6 ${className}`}>{children}</div>
 );
 
 // ─── HomePage ─────────────────────────────────────────────────────────────────
 
 const HomePage = () => {
-  const { location, setLocation } = useOutletContext();
+  const { location } = useOutletContext();
   const { user }       = useSelector((s) => s.auth);
   const filters        = useSelector((s) => s.filters);
   const recentlyViewed = useSelector(selectRecentlyViewed);
@@ -310,22 +240,19 @@ const HomePage = () => {
   const pageRef             = useRef(1);
 
   const categoryCarousel       = useCarousel();
-  const topBrandsCarousel      = useCarousel();
-  const topRestaurantsCarousel = useCarousel();
   const recentlyViewedCarousel = useCarousel();
+  const { feed: homeFeed, loading: homeFeedLoading } = useHomeFeed(location.lat, location.lng);
 
   useEffect(() => {
-    topBrandsCarousel.update();
-    topRestaurantsCarousel.update();
     recentlyViewedCarousel.update();
-  }, [fetchedRestaurants]); // eslint-disable-line
+  }, [recentlyViewed]); // eslint-disable-line
 
   useEffect(() => {
     setPage(1);
     pageRef.current = 1;
     setFetchedRestaurants([]);
     fetchPage(1, true);
-  }, [location]); // eslint-disable-line
+  }, [location, filters]); // eslint-disable-line
 
   const fetchPage = async (pageNum, reset = false) => {
     if (isFetchingRef.current) return;
@@ -334,7 +261,9 @@ const HomePage = () => {
     else setLoadingMore(true);
     setError("");
     try {
-      const { data } = await getRestaurants(location.lat, location.lng, { radius: RADIUS, limit: LIMIT, page: pageNum });
+      const { data } = await getRestaurants(location.lat, location.lng, {
+        radius: RADIUS, limit: LIMIT, page: pageNum, filters,
+      });
       const restaurants = data.restaurants ?? [];
       const serverTotal = data.total ?? 0;
       setFetchedRestaurants((prev) => (reset || pageNum === 1 ? restaurants : [...prev, ...restaurants]));
@@ -372,21 +301,6 @@ const HomePage = () => {
   }, [fetchedRestaurants.length, total, loading, loadingMore]); // eslint-disable-line
 
   // ── Derived data ─────────────────────────────────────────────────────────────
-  const topBrands = useMemo(
-    () => [...fetchedRestaurants].filter((r) => r.avgRating).sort((a, b) => parseFloat(b.avgRating) - parseFloat(a.avgRating)).slice(0, 10),
-    [fetchedRestaurants]
-  );
-
-  const topRestaurants = useMemo(
-    () => [...fetchedRestaurants].filter((r) => r.avgRating).sort((a, b) => parseFloat(b.avgRating) - parseFloat(a.avgRating)).slice(0, 10),
-    [fetchedRestaurants]
-  );
-
-  const curatedCollections = useMemo(
-    () => buildCollections(fetchedRestaurants),
-    [fetchedRestaurants]
-  );
-
   const allCuisines = useMemo(() => {
     const set = new Set();
     fetchedRestaurants.forEach((r) =>
@@ -395,35 +309,7 @@ const HomePage = () => {
     return Array.from(set).sort();
   }, [fetchedRestaurants]);
 
-  const filteredRestaurants = useMemo(() => {
-    let list = [...fetchedRestaurants];
-    if (filters.vegOnly) {
-      list = list.filter((r) => r.isPureVeg === true);
-    }
-    if (filters.cuisines.length > 0) {
-      const sel = new Set(filters.cuisines.map((c) => c.toLowerCase().trim()));
-      list = list.filter((r) =>
-        (Array.isArray(r.cuisines) ? r.cuisines : []).map((c) => c.toLowerCase().trim()).some((c) => sel.has(c))
-      );
-    }
-    if (filters.rating !== null) list = list.filter((r) => parseFloat(r.avgRating || 0) >= filters.rating);
-    if (filters.costRange !== null) {
-      list = list.filter((r) => {
-        const c = r.costForTwo || 0;
-        if (filters.costRange === "low")  return c < 20000;
-        if (filters.costRange === "mid")  return c >= 20000 && c <= 50000;
-        if (filters.costRange === "high") return c > 50000;
-        return true;
-      });
-    }
-    if (filters.deliveryTimeMax !== null)
-      list = list.filter((r) => parseInt(r.deliveryTime || 45, 10) <= filters.deliveryTimeMax);
-    if (filters.sortBy === "rating_desc")
-      list.sort((a, b) => parseFloat(b.avgRating || 0) - parseFloat(a.avgRating || 0));
-    else if (filters.sortBy === "cost_asc")  list.sort((a, b) => (a.costForTwo || 0) - (b.costForTwo || 0));
-    else if (filters.sortBy === "cost_desc") list.sort((a, b) => (b.costForTwo || 0) - (a.costForTwo || 0));
-    return list;
-  }, [fetchedRestaurants, filters]);
+  const filteredRestaurants = fetchedRestaurants;
 
   const modalFilterCount = [
     filters.sortBy !== "popularity" ? 1 : 0,
@@ -431,58 +317,84 @@ const HomePage = () => {
     filters.rating !== null ? 1 : 0,
     filters.costRange !== null ? 1 : 0,
     filters.deliveryTimeMax !== null ? 1 : 0,
+    filters.maxDistance !== null ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
-  const anyFilterActive = filters.vegOnly || modalFilterCount > 0;
+  const anyFilterActive = filters.pureVeg || filters.vegOnly || filters.nonVegOnly || filters.openNowOnly
+    || filters.hasOffers || filters.freeDelivery || filters.newRestaurants || filters.acceptsOnlinePayment
+    || modalFilterCount > 0;
   const hasMore         = fetchedRestaurants.length < total;
   const locationName    = location?.address ? location.address.split(",")[0] : "your area";
+  const fastDeliveryOn  = filters.deliveryTimeMax === 30;
 
   const handleApplyFilters = useCallback((p) => dispatch(applyFilters(p)), [dispatch]);
   const handleClearFilters = useCallback(() => dispatch(clearFilters()), [dispatch]);
+  const toggleFastDelivery = useCallback(() => {
+    dispatch(applyFilters({ deliveryTimeMax: fastDeliveryOn ? null : 30 }));
+  }, [dispatch, fastDeliveryOn]);
 
   // ── Guards ────────────────────────────────────────────────────────────────────
   if (!onlineStatus) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] p-6">
-        <div className="glass-card rounded-3xl p-10 text-center max-w-sm">
-          <div className="text-5xl mb-4">🚨</div>
-          <h2 className="text-xl font-bold text-foreground mb-2">You're offline!</h2>
-          <p className="text-muted-foreground text-sm">Please check your internet connection.</p>
-        </div>
+      <div className="h-full min-h-[calc(100vh-7rem)] p-3 sm:p-4">
+        <ErrorPageView
+          kind="offline"
+          embedded
+          onRetry={() => window.location.reload()}
+          onHome={() => navigate("/home")}
+          onHelp={() => navigate("/home/help")}
+        />
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="p-6 space-y-10">
-        <ShimmerCategories />
-        <ShimmerBrands />
-        <ShimmerCarousel />
+      <div className="dashboard-home px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+        <ShimmerBanner />
+        <div>
+          <div className="shimmer h-6 w-28 rounded-lg mb-2" />
+          <div className="shimmer h-3 w-40 rounded-full mb-5" />
+          <ShimmerCategories />
+        </div>
+        <div>
+          <div className="shimmer h-6 w-36 rounded-lg mb-2" />
+          <div className="shimmer h-3 w-48 rounded-full mb-5" />
+          <ShimmerDishes />
+        </div>
+        <div>
+          <div className="shimmer h-6 w-40 rounded-lg mb-5" />
+          <ShimmerCarousel />
+        </div>
       </div>
     );
   }
 
   if (!loading && fetchedRestaurants.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 py-12">
-        <div className="glass-card rounded-3xl p-10 text-center max-w-sm">
-          <img
-            src={require("../assets/location_unserviceable.webp")}
-            alt="Service not available"
-            className="w-40 h-40 object-contain opacity-90 mx-auto mb-5"
+    if (error) {
+      return (
+        <div className="h-full min-h-[calc(100vh-7rem)] p-3 sm:p-4">
+          <ErrorPageView
+            kind="server"
+            embedded
+            error={new Error(error)}
+            onRetry={() => window.location.reload()}
+            onHome={() => navigate("/home")}
+            onHelp={() => navigate("/home/help")}
           />
-          <h2 className="text-2xl font-bold text-foreground mb-2">We'll be there soon!</h2>
-          <p className="text-muted-foreground text-sm mb-6">
-            {error || "Cravon isn't serving this location yet. We're expanding rapidly!"}
-          </p>
-          <button
-            onClick={() => window.dispatchEvent(new Event("openLocationSidebar"))}
-            className="btn-primary rounded-full px-6"
-          >
-            Choose a different location
-          </button>
         </div>
+      );
+    }
+    return (
+      <div className="h-full min-h-[calc(100vh-7rem)] p-3 sm:p-4">
+        <ErrorPageView
+          kind="unserviceable"
+          embedded
+          onRetry={() => window.location.reload()}
+          onHome={() => navigate("/home")}
+          onHelp={() => navigate("/home/help")}
+          onChangeLocation={() => window.dispatchEvent(new Event("openLocationSidebar"))}
+        />
       </div>
     );
   }
@@ -491,18 +403,18 @@ const HomePage = () => {
   return (
     <div className="dashboard-home pb-8">
 
-      {/* ── 0. PROMO BANNERS ─────────────────────────────────────── */}
+      {/* 1. Promo */}
       <Section className="pt-6 pb-4">
         <PromoBannerCarousel />
       </Section>
 
       <div className="section-divider" />
 
-      {/* ── 1. WHAT'S ON YOUR MIND (categories) ─────────────────── */}
+      {/* 2. Category */}
       <Section>
         <SectionHeader
-          title={user ? `${user.name.split(" ")[0]}, what's on your mind? 🤤` : "What's on your mind? 🤤"}
-          subtitle="Tap a category to explore"
+          title="Category"
+          subtitle={user ? "Picked for your taste" : "Tap a category to explore"}
           right={
             <>
               {categoryCarousel.canLeft  && <CarouselArrow direction="left"  onClick={() => categoryCarousel.scroll("left")} />}
@@ -510,79 +422,56 @@ const HomePage = () => {
             </>
           }
         />
-        <div ref={categoryCarousel.ref} className="flex gap-5 sm:gap-7 overflow-x-auto scrollbar-hide pb-3">
-          {FOOD_CATEGORIES.map((cat) => (
-            <CategoryCircle
-              key={cat.id}
-              cat={cat}
-              onClick={() => navigate(`/home/search?q=${encodeURIComponent(cat.query)}`)}
-            />
-          ))}
+        <div className="relative overflow-visible">
+          <div
+            ref={categoryCarousel.ref}
+            className="category-scroll flex gap-2 sm:gap-3 px-1"
+          >
+            {FOOD_CATEGORIES.map((cat) => (
+              <CategoryCard
+                key={cat.id}
+                cat={cat}
+                onClick={() => navigate(`/home/search?q=${encodeURIComponent(cat.query)}`)}
+              />
+            ))}
+          </div>
         </div>
       </Section>
 
+      {/* 3. Order Again (logged-in only) */}
+      {user && (homeFeedLoading || homeFeed?.recentlyOrdered?.length > 0) && (
+        <>
+          <div className="section-divider" />
+          <OrderAgainSection feed={homeFeed} loading={homeFeedLoading} />
+        </>
+      )}
+
       <div className="section-divider" />
 
-      {/* ── 1b. DISH CAROUSEL ───────────────────────────────────── */}
+      {/* 4. Popular Dishes */}
       <Section>
         <SectionHeader
-          title="Craving something? 🍽️"
-          subtitle="Popular dishes near you — tap to order from the restaurant"
+          title="Popular Dishes"
+          subtitle="Trending near you — tap + to order"
         />
         <DishCarousel lat={location.lat} lng={location.lng} />
       </Section>
 
-      <div className="section-divider" />
-      <Section>
-        <SectionHeader
-          title="Best Restaurants for You 🌟"
-          subtitle="Most loved spots near you"
-          right={
-            <>
-              {topBrandsCarousel.canLeft  && <CarouselArrow direction="left"  onClick={() => topBrandsCarousel.scroll("left")} />}
-              {topBrandsCarousel.canRight && <CarouselArrow direction="right" onClick={() => topBrandsCarousel.scroll("right")} />}
-            </>
-          }
-        />
-        {topBrands.length === 0 ? (
-          <ShimmerBrands />
-        ) : (
-          <div ref={topBrandsCarousel.ref} className="flex gap-5 sm:gap-7 overflow-x-auto scrollbar-hide pb-3">
-            {topBrands.map((r) => <BrandCircle key={r.id} restaurant={r} />)}
-          </div>
-        )}
-      </Section>
+      {/* 5. Featured */}
+      {homeFeed?.featured?.length > 0 && (
+        <>
+          <div className="section-divider" />
+          <FeaturedSection feed={homeFeed} loading={false} />
+        </>
+      )}
 
-      <div className="section-divider" />
-
-      {/* ── 3. TOP RESTAURANTS IN LOCATION ──────────────────────── */}
-      <Section>
-        <SectionHeader
-          title={`Top Restaurants in ${locationName} 📍`}
-          subtitle="Best rated places to order from"
-          right={
-            <>
-              {topRestaurantsCarousel.canLeft  && <CarouselArrow direction="left"  onClick={() => topRestaurantsCarousel.scroll("left")} />}
-              {topRestaurantsCarousel.canRight && <CarouselArrow direction="right" onClick={() => topRestaurantsCarousel.scroll("right")} />}
-            </>
-          }
-        />
-        {topRestaurants.length === 0 ? (
-          <ShimmerCarousel />
-        ) : (
-          <div ref={topRestaurantsCarousel.ref} className="flex gap-4 overflow-x-auto scrollbar-hide pb-3">
-            {topRestaurants.map((r) => <GlassRestaurantCard key={r.id} resData={r} wide />)}
-          </div>
-        )}
-      </Section>
-
-      {/* ── 3.5. RECENTLY VIEWED ─────────────────────────────────── */}
+      {/* 6. Recently Viewed */}
       {recentlyViewed.length > 0 && (
         <>
           <div className="section-divider" />
           <Section>
             <SectionHeader
-              title="Your Recently Viewed 👀"
+              title="Recently Viewed"
               subtitle="Pick up where you left off"
               right={
                 <>
@@ -598,23 +487,13 @@ const HomePage = () => {
         </>
       )}
 
-      {curatedCollections.length > 0 && (
-        <>
-          <div className="section-divider" />
-          <Section>
-            <SectionHeader title="Curated for you ✨" subtitle="Hand-picked collections near your location" />
-            <CuratedCollections collections={curatedCollections} />
-          </Section>
-        </>
-      )}
-
       <div className="section-divider" />
 
-      {/* ── 4. ALL RESTAURANTS NEAR YOU ──────────────────────────── */}
+      {/* 7. All Restaurants */}
       <Section>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-foreground">All Restaurants Near Me 🏙️</h2>
+            <h2 className="font-display text-lg sm:text-xl font-extrabold text-foreground">All Restaurants Near Me</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
               {total} restaurants in {locationName}
               {anyFilterActive && <span className="ml-2 text-primary font-medium">· filtered</span>}
@@ -622,20 +501,60 @@ const HomePage = () => {
           </div>
         </div>
 
-        {/* Filter bar */}
         <div className="flex flex-wrap items-center gap-2 mb-6">
           <button
-            onClick={() => dispatch(toggleVeg())}
+            onClick={() => dispatch(togglePureVeg())}
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-sm font-semibold whitespace-nowrap transition-all ${
-              filters.vegOnly
-                ? "bg-green-600 border-green-600 text-white shadow-md"
-                : "glass-btn border-border text-foreground hover:border-green-400"
+              filters.pureVeg ? "bg-green-600 border-green-600 text-white shadow-md" : "glass-btn border-border text-foreground hover:border-green-400"
             }`}
           >
-            <FaLeaf className={filters.vegOnly ? "text-white" : "text-green-500"} size={11} />
+            <FaLeaf className={filters.pureVeg ? "text-white" : "text-green-500"} size={11} />
             Pure Veg
           </button>
-
+          <button
+            onClick={() => dispatch(toggleNonVeg())}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-sm font-semibold whitespace-nowrap transition-all ${
+              filters.nonVegOnly ? "bg-red-600 border-red-600 text-white shadow-md" : "glass-btn border-border text-foreground hover:border-red-400"
+            }`}
+          >
+            Non-Veg
+          </button>
+          <button
+            onClick={() => dispatch(toggleOpenNow())}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-sm font-semibold whitespace-nowrap transition-all ${
+              filters.openNowOnly
+                ? "bg-emerald-600 border-emerald-600 text-white shadow-md"
+                : "glass-btn border-border text-foreground hover:border-emerald-400"
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${filters.openNowOnly ? "bg-white" : "bg-emerald-500"}`} />
+            Open Now
+          </button>
+          <button
+            onClick={toggleFastDelivery}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-sm font-semibold whitespace-nowrap transition-all ${
+              fastDeliveryOn ? "bg-primary border-primary text-white shadow-md" : "glass-btn border-border text-foreground hover:border-primary"
+            }`}
+          >
+            <FaBolt size={11} className={fastDeliveryOn ? "text-white" : "text-primary"} />
+            Fast Delivery
+          </button>
+          <button
+            onClick={() => dispatch(toggleHasOffers())}
+            className={`px-3.5 py-2 rounded-full border text-sm font-semibold whitespace-nowrap transition-all ${
+              filters.hasOffers ? "bg-orange-500 border-orange-500 text-white" : "glass-btn border-border"
+            }`}
+          >
+            Offers
+          </button>
+          <button
+            onClick={() => dispatch(toggleNewRestaurants())}
+            className={`px-3.5 py-2 rounded-full border text-sm font-semibold whitespace-nowrap transition-all ${
+              filters.newRestaurants ? "bg-violet-600 border-violet-600 text-white" : "glass-btn border-border"
+            }`}
+          >
+            New
+          </button>
           <button
             onClick={() => setFilterModalOpen(true)}
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-sm font-semibold whitespace-nowrap transition-all ${
@@ -653,6 +572,18 @@ const HomePage = () => {
             )}
           </button>
 
+          {filters.pureVeg && (
+            <FilterTag label="Pure Veg" onRemove={() => dispatch(togglePureVeg())} />
+          )}
+          {filters.nonVegOnly && (
+            <FilterTag label="Non-Veg" onRemove={() => dispatch(toggleNonVeg())} />
+          )}
+          {filters.openNowOnly && (
+            <FilterTag label="Open Now" onRemove={() => dispatch(toggleOpenNow())} />
+          )}
+          {fastDeliveryOn && (
+            <FilterTag label="Fast ≤30 min" onRemove={toggleFastDelivery} />
+          )}
           {filters.sortBy !== "popularity" && (
             <FilterTag
               label={{ rating_desc: "Rating ↓", cost_asc: "Cost ↑", cost_desc: "Cost ↓" }[filters.sortBy]}
@@ -668,7 +599,7 @@ const HomePage = () => {
           {filters.costRange !== null && (
             <FilterTag label={{ low: "₹", mid: "₹₹", high: "₹₹₹" }[filters.costRange]} onRemove={() => dispatch(applyFilters({ costRange: null }))} />
           )}
-          {filters.deliveryTimeMax !== null && (
+          {filters.deliveryTimeMax !== null && filters.deliveryTimeMax !== 30 && (
             <FilterTag label={`⏱ Under ${filters.deliveryTimeMax} mins`} onRemove={() => dispatch(applyFilters({ deliveryTimeMax: null }))} />
           )}
           {anyFilterActive && (
@@ -678,7 +609,6 @@ const HomePage = () => {
           )}
         </div>
 
-        {/* Grid */}
         {filteredRestaurants.length === 0 ? (
           <div className="glass-card rounded-3xl text-center py-16 px-6">
             <div className="text-5xl mb-4">😕</div>
@@ -688,17 +618,12 @@ const HomePage = () => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredRestaurants.map((r) => <GlassGridCard key={r.id} resData={r} />)}
-              {loadingMore && <ShimmerGridCards count={4} />}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredRestaurants.map((r) => <RestaurantCard key={r.id} resData={r} />)}
+              {loadingMore && <ShimmerGridCards count={3} />}
               {hasMore && <div ref={loadMoreSentinelRef} className="col-span-full h-1 w-full" aria-hidden />}
             </div>
-            {!hasMore && fetchedRestaurants.length > 0 && (
-              <>
-                <HomeDiscoverSections setLocation={setLocation} extraCuisines={allCuisines} />
-                <DashboardFooter />
-              </>
-            )}
+            {!hasMore && fetchedRestaurants.length > 0 && <DashboardFooter />}
           </>
         )}
       </Section>

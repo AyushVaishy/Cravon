@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate, useSearchParams, useOutletContext } from "react-router-dom";
-import { FaSearch, FaMicrophone, FaMapMarkerAlt } from "react-icons/fa";
+import { FaSearch, FaMicrophone, FaMapMarkerAlt, FaHistory } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { searchRestaurants, getTrendingSearches } from "../services/searchService";
 import RestaurantCard from "../components/RestaurantCard";
@@ -224,6 +224,12 @@ const SearchResultsPage = () => {
 
         {!query ? (
           <div className="glass-card rounded-3xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <p className="text-sm font-semibold text-foreground">Search & discover</p>
+              <Link to="/home/search/history" className="text-sm font-semibold text-primary hover:underline flex items-center gap-1.5">
+                <FaHistory size={12} /> Search history
+              </Link>
+            </div>
             <SearchAssistPanel
               recent={recent}
               trending={trending}

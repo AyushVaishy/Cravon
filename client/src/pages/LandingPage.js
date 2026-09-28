@@ -1,363 +1,800 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
 import {
+  FaArrowRight,
   FaBolt,
   FaBrain,
-  FaChevronRight,
-  FaClock,
+  FaMagic,
   FaMapMarkerAlt,
   FaSearch,
   FaShieldAlt,
-  FaShoppingBag,
-  FaStar,
   FaUserFriends,
 } from "react-icons/fa";
 import LandingLayout, { useLandingUi } from "../components/landing/LandingLayout";
-import { searchLocations } from "../services/locationService";
-import { saveBrowseLocation } from "../utils/locationStorage";
+
+const UNIQUE_BG_LIGHT = `${process.env.PUBLIC_URL}/landing/section3_bg.png`;
+const UNIQUE_BG_DARK = `${process.env.PUBLIC_URL}/landing/section3_bg_dark.png`;
+const EVERYTHING_BG_LIGHT = `${process.env.PUBLIC_URL}/landing/section4.png`;
+const EVERYTHING_BG_DARK = `${process.env.PUBLIC_URL}/landing/section4_darkbg.png`;
+const PARTNER_BG_LIGHT = `${process.env.PUBLIC_URL}/landing/section5.png`;
+const PARTNER_BG_DARK = `${process.env.PUBLIC_URL}/landing/section5_darkbg.png`;
+const groupMembers = [
+  { initial: "A", name: "Aarav", fill: 46 },
+  { initial: "M", name: "Meera", fill: 72 },
+  { initial: "K", name: "Kabir", fill: 90 },
+];
+
+const FRESH_VIDEO_LIGHT = `${process.env.PUBLIC_URL}/landing/section2.mp4`;
+const FRESH_VIDEO_DARK = `${process.env.PUBLIC_URL}/landing/section2_dark.mp4`;
+const HERO_VIDEO_LIGHT = `${process.env.PUBLIC_URL}/landing/section1.mp4`;
+const HERO_VIDEO_DARK = `${process.env.PUBLIC_URL}/landing/section1_dark.mp4`;
+
+const freshCuisines = [
+  { label: "Biryani", query: "biryani" },
+  { label: "Burgers", query: "burger" },
+  { label: "Pizza", query: "pizza" },
+  { label: "North Indian", query: "north indian" },
+];
+
+const everythingFeatures = [
+  {
+    icon: FaMapMarkerAlt,
+    title: "Location-Based Discovery",
+    desc: "Find the best spots nearby with live, prep-time aware recommendations.",
+  },
+  {
+    icon: FaBolt,
+    title: "Lightning Delivery",
+    desc: "From kitchen to doorstep with real-time ETA and route tracking.",
+  },
+  {
+    icon: FaShieldAlt,
+    title: "Trusted Checkout",
+    desc: "Encrypted payment flow with safe, reliable order confirmation.",
+  },
+  {
+    icon: FaSearch,
+    title: "Precision Search",
+    desc: "Advanced filters across cuisine, budget, spice level and dietary needs.",
+  },
+  {
+    icon: FaUserFriends,
+    title: "Group Ordering",
+    desc: "Collaborative carts for team meals and shared party orders.",
+    soon: true,
+  },
+  {
+    icon: FaBrain,
+    title: "AI Meal Match",
+    desc: "Personalised suggestions tuned to your mood, the weather and your habits.",
+    soon: true,
+  },
+];
 
 const LandingHomeContent = () => {
-  const { openAuth } = useLandingUi();
+  const { openAuth, isDark } = useLandingUi();
   const navigate = useNavigate();
-  const [locationQuery, setLocationQuery] = useState("");
-  const [foodQuery, setFoodQuery] = useState("");
-  const [searching, setSearching] = useState(false);
+  const [heroQuery, setHeroQuery] = useState("");
+  const everythingRef = useRef(null);
+  const [everythingVisible, setEverythingVisible] = useState(false);
+  const uniqueRef = useRef(null);
+  const [uniqueVisible, setUniqueVisible] = useState(false);
+  const partnerRef = useRef(null);
+  const [partnerVisible, setPartnerVisible] = useState(false);
+  const heroSectionRef = useRef(null);
+  const heroLightVideoRef = useRef(null);
+  const heroDarkVideoRef = useRef(null);
+  const heroInViewRef = useRef(false);
+  const isDarkRef = useRef(isDark);
+  const freshSectionRef = useRef(null);
+  const freshLightVideoRef = useRef(null);
+  const freshDarkVideoRef = useRef(null);
+  const freshInViewRef = useRef(false);
+  const freshLockRef = useRef(false);
+  const freshHalfDoneRef = useRef(false);
+  const [freshScrollLocked, setFreshScrollLocked] = useState(false);
+  const [freshBlockDown, setFreshBlockDown] = useState(false);
 
-  const handleBrowse = async () => {
-    const q = locationQuery.trim();
-    if (q) {
-      setSearching(true);
-      try {
-        const res = await searchLocations(q);
-        const results = res.data.results || [];
-        if (results.length === 0) {
-          toast.error("Location not found. Try a city, area, or pincode.");
-          return;
-        }
-        const pick = results[0];
-        saveBrowseLocation({ lat: pick.lat, lng: pick.lng, address: pick.displayName });
-      } catch {
-        toast.error("Could not search location. Try again.");
-        return;
-      } finally {
-        setSearching(false);
-      }
-    }
-    const params = foodQuery.trim()
-      ? `/home/search?q=${encodeURIComponent(foodQuery.trim())}`
-      : "/home";
-    navigate(params);
+  isDarkRef.current = isDark;
+
+  const goBrowseRestro = () => navigate("/home");
+
+  const goExplore = (overrideQuery) => {
+    const q = (typeof overrideQuery === "string" ? overrideQuery : heroQuery).trim();
+    navigate(q ? `/home/search?q=${encodeURIComponent(q)}` : "/home");
   };
 
-  const featureCards = [
-    {
-      icon: <FaMapMarkerAlt className="text-brand" size={18} />,
-      title: "Location-Based Discovery",
-      description: "Find the best spots nearby with live prep-time aware recommendations.",
-    },
-    {
-      icon: <FaClock className="text-brand" size={18} />,
-      title: "Lightning Delivery",
-      description: "From kitchen to doorstep with real-time ETA and route tracking.",
-    },
-    {
-      icon: <FaShieldAlt className="text-brand" size={18} />,
-      title: "Trusted Checkout",
-      description: "Encrypted payment flow with safe and reliable order confirmation.",
-    },
-    {
-      icon: <FaSearch className="text-brand" size={18} />,
-      title: "Precision Search",
-      description: "Advanced filters across cuisine, budget, spice level, and dietary needs.",
-    },
-    {
-      icon: <FaUserFriends className="text-brand" size={18} />,
-      title: "Group Ordering",
-      description: "Collaborative carts for team meals and shared party orders.",
-    },
-    {
-      icon: <FaBrain className="text-brand" size={18} />,
-      title: "AI Meal Match",
-      description: "Personalized meal suggestions tuned to mood, weather, and habits.",
-    },
-  ];
+  const getActiveHeroVideo = () =>
+    isDarkRef.current ? heroDarkVideoRef.current : heroLightVideoRef.current;
+
+  const getInactiveHeroVideo = () =>
+    isDarkRef.current ? heroLightVideoRef.current : heroDarkVideoRef.current;
+
+  const getActiveFreshVideo = () =>
+    isDarkRef.current ? freshDarkVideoRef.current : freshLightVideoRef.current;
+
+  const getInactiveFreshVideo = () =>
+    isDarkRef.current ? freshLightVideoRef.current : freshDarkVideoRef.current;
+
+  const playVideoOnce = (video) => {
+    if (!video) return;
+    video.currentTime = 0;
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
+    }
+  };
+
+  const pauseVideo = (video) => {
+    if (!video) return;
+    video.pause();
+    video.currentTime = 0;
+  };
+
+  /** Decode & paint frame 0 while paused (avoids black void when posters are missing). */
+  const paintFirstFrame = (video) => {
+    if (!video) return;
+    const reveal = () => {
+      try {
+        if (video.currentTime < 0.05) video.currentTime = 0.05;
+      } catch (_) {
+        /* ignore seek errors before ready */
+      }
+    };
+    if (video.readyState >= 2) reveal();
+    else video.addEventListener("loadeddata", reveal, { once: true });
+  };
+
+  const unlockFreshScroll = () => {
+    freshLockRef.current = false;
+    freshHalfDoneRef.current = false;
+    setFreshScrollLocked(false);
+    setFreshBlockDown(false);
+  };
+
+  const lockFreshScroll = () => {
+    freshLockRef.current = true;
+    freshHalfDoneRef.current = false;
+    setFreshScrollLocked(true);
+    setFreshBlockDown(true);
+  };
+
+  const startFreshPlayback = () => {
+    const active = getActiveFreshVideo();
+    const inactive = getInactiveFreshVideo();
+    if (!active) return;
+    pauseVideo(inactive);
+    lockFreshScroll();
+    playVideoOnce(active);
+  };
+
+  useEffect(() => {
+    const targets = [
+      [uniqueRef.current, setUniqueVisible],
+      [everythingRef.current, setEverythingVisible],
+      [partnerRef.current, setPartnerVisible],
+    ].filter(([el]) => el);
+    const observers = targets.map(([el, setVisible]) => {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setVisible(true);
+            observer.disconnect();
+          }
+        },
+        { threshold: 0.15 }
+      );
+      observer.observe(el);
+      return observer;
+    });
+    return () => observers.forEach((observer) => observer.disconnect());
+  }, []);
+
+  // Theme swap: crossfade between preloaded videos (no remount)
+  useEffect(() => {
+    pauseVideo(getInactiveHeroVideo());
+    pauseVideo(getInactiveFreshVideo());
+    if (heroInViewRef.current) {
+      playVideoOnce(getActiveHeroVideo());
+    }
+    if (freshLockRef.current || freshInViewRef.current) {
+      startFreshPlayback();
+    }
+  }, [isDark]);
+
+  useEffect(() => {
+    const section = heroSectionRef.current;
+    const lightVideo = heroLightVideoRef.current;
+    const darkVideo = heroDarkVideoRef.current;
+    if (!section || !lightVideo || !darkVideo) return undefined;
+
+    paintFirstFrame(lightVideo);
+    paintFirstFrame(darkVideo);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const nowInView = entry.isIntersecting && entry.intersectionRatio >= 0.25;
+        if (nowInView && !heroInViewRef.current) {
+          playVideoOnce(getActiveHeroVideo());
+        } else if (!nowInView && heroInViewRef.current) {
+          pauseVideo(lightVideo);
+          pauseVideo(darkVideo);
+          paintFirstFrame(lightVideo);
+          paintFirstFrame(darkVideo);
+        }
+        heroInViewRef.current = nowInView;
+      },
+      { threshold: [0, 0.25, 0.5] }
+    );
+
+    observer.observe(section);
+    playVideoOnce(getActiveHeroVideo());
+    heroInViewRef.current = true;
+
+    return () => {
+      observer.disconnect();
+      pauseVideo(lightVideo);
+      pauseVideo(darkVideo);
+      heroInViewRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const section = freshSectionRef.current;
+    const lightVideo = freshLightVideoRef.current;
+    const darkVideo = freshDarkVideoRef.current;
+    if (!section || !lightVideo || !darkVideo) return undefined;
+
+    let fillStableTimer = null;
+
+    paintFirstFrame(lightVideo);
+    paintFirstFrame(darkVideo);
+
+    const clearFillTimer = () => {
+      if (!fillStableTimer) return;
+      window.clearTimeout(fillStableTimer);
+      fillStableTimer = null;
+    };
+
+    const exitFreshSession = () => {
+      clearFillTimer();
+      freshInViewRef.current = false;
+      pauseVideo(lightVideo);
+      pauseVideo(darkVideo);
+      paintFirstFrame(lightVideo);
+      paintFirstFrame(darkVideo);
+      unlockFreshScroll();
+    };
+
+    const onEnded = (event) => {
+      // Only unlock for the theme video that was actually playing
+      const active = getActiveFreshVideo();
+      if (active && event.target !== active) return;
+      unlockFreshScroll();
+    };
+
+    const onTimeUpdate = (event) => {
+      const active = getActiveFreshVideo();
+      if (!active || event.target !== active) return;
+      const video = event.target;
+      if (!video.duration || Number.isNaN(video.duration) || video.duration <= 0) return;
+      const pct = (video.currentTime / video.duration) * 100;
+      // After halfway, allow scrolling down too
+      if (pct >= 50 && !freshHalfDoneRef.current) {
+        freshHalfDoneRef.current = true;
+        setFreshBlockDown(false);
+      }
+    };
+
+    const bindVideo = (video) => {
+      video.addEventListener("ended", onEnded);
+      video.addEventListener("timeupdate", onTimeUpdate);
+    };
+
+    const unbindVideo = (video) => {
+      video.removeEventListener("ended", onEnded);
+      video.removeEventListener("timeupdate", onTimeUpdate);
+    };
+
+    bindVideo(lightVideo);
+    bindVideo(darkVideo);
+
+    // Only lock + play once section 2 fully fills the viewport (no snap)
+    const readsAsFullScreen = () => {
+      const rect = section.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      if (vh <= 0) return false;
+      return rect.top <= 2 && rect.bottom >= vh - 2;
+    };
+
+    // Left via top→down or down→up — enough that a re-enter should replay from start
+    const hasLeftSection = () => {
+      const rect = section.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      return rect.top > vh * 0.28 || rect.bottom < vh * 0.72;
+    };
+
+    const tryStartWhenSettled = () => {
+      if (freshLockRef.current || freshInViewRef.current) return;
+      if (!readsAsFullScreen()) {
+        clearFillTimer();
+        return;
+      }
+      // Brief settle so mid-scroll doesn't lock early
+      if (fillStableTimer) return;
+      fillStableTimer = window.setTimeout(() => {
+        fillStableTimer = null;
+        if (freshLockRef.current || freshInViewRef.current) return;
+        if (!readsAsFullScreen()) return;
+        freshInViewRef.current = true;
+        startFreshPlayback();
+      }, 120);
+    };
+
+    const onScrollOrResize = () => {
+      // Always clear the visit when leaving — even after video ended (unlocked).
+      // That way top→down and down→up both replay from the start.
+      if (hasLeftSection()) {
+        exitFreshSession();
+        return;
+      }
+      if (freshLockRef.current) return;
+      tryStartWhenSettled();
+    };
+
+    const observer = new IntersectionObserver(
+      () => {
+        onScrollOrResize();
+      },
+      { threshold: [0, 0.15, 0.3, 0.5, 0.7, 0.85, 1] }
+    );
+
+    observer.observe(section);
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    tryStartWhenSettled();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+      clearFillTimer();
+      unbindVideo(lightVideo);
+      unbindVideo(darkVideo);
+      pauseVideo(lightVideo);
+      pauseVideo(darkVideo);
+      unlockFreshScroll();
+      freshInViewRef.current = false;
+    };
+  }, []);
+
+  // First half of video: allow up, block down. After 50%: free scroll.
+  useEffect(() => {
+    if (!freshBlockDown) return undefined;
+
+    let touchStartY = 0;
+
+    const blockDown = (event) => {
+      event.preventDefault();
+    };
+
+    const onWheel = (event) => {
+      if (event.deltaY > 0) blockDown(event);
+    };
+
+    const onTouchStart = (event) => {
+      touchStartY = event.touches[0]?.clientY ?? 0;
+    };
+
+    const onTouchMove = (event) => {
+      const y = event.touches[0]?.clientY ?? 0;
+      if (touchStartY - y > 2) blockDown(event);
+    };
+
+    const onKeyDown = (event) => {
+      if (["ArrowDown", "PageDown", "End", " ", "Spacebar"].includes(event.key)) {
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("keydown", onKeyDown, { passive: false });
+
+    return () => {
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [freshBlockDown]);
 
   return (
-    <div className="pt-16 overflow-x-hidden">
-      <section className="relative px-6 py-20 md:px-8">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(241,90,36,0.18),transparent_45%)]" />
-        <div className="relative mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 lg:grid-cols-2">
-          <div className="space-y-8">
-            
-
-            <h1 className="text-5xl font-bold leading-[1.05] tracking-tight text-app-primary md:text-7xl">
-              Smarter Food Ordering
-              <span className="block text-brand">Starts Here</span>
-            </h1>
-            <p className="max-w-xl text-lg leading-relaxed text-app-secondary">
-              Experience premium food delivery with AI-powered suggestions, live group ordering,
-              and deeply personalized discovery.
-            </p>
-
-            <div className="landing-glass flex max-w-2xl flex-col items-center gap-4 rounded-3xl border border-app-border p-2 sm:flex-row">
-              <div className="flex w-full flex-1 items-center gap-3 px-4">
-                <FaMapMarkerAlt className="text-brand" />
-                <input
-                  type="text"
-                  placeholder="Enter location..."
-                  value={locationQuery}
-                  onChange={(e) => setLocationQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleBrowse()}
-                  className="w-full bg-transparent py-3 text-app-primary outline-none placeholder:text-app-secondary/60"
-                />
-              </div>
-              <div className="hidden h-8 w-px bg-app-border sm:block" />
-              <div className="flex w-full flex-1 items-center gap-3 px-4">
-                <FaSearch className="text-app-secondary/70" />
-                <input
-                  type="text"
-                  placeholder="Search food or restaurant"
-                  value={foodQuery}
-                  onChange={(e) => setFoodQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleBrowse()}
-                  className="w-full bg-transparent py-3 text-app-primary outline-none placeholder:text-app-secondary/60"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleBrowse}
-                disabled={searching}
-                className="w-full shrink-0 rounded-2xl bg-brand px-8 py-3 font-bold text-white transition-colors hover:bg-brand-dark disabled:opacity-60 sm:w-auto"
-              >
-                {searching ? "Searching…" : "Browse restaurants"}
+    <div className={`landing-home ${isDark ? "landing-home--dark" : "landing-home--light"}`}>
+      <section ref={heroSectionRef} className="landing-panel landing-panel--hero">
+        <div className="landing-mode-media">
+          <video
+            ref={heroLightVideoRef}
+            className={`landing-panel__img landing-panel__video landing-mode-video landing-mode-video--light ${
+              !isDark ? "is-active" : ""
+            }`}
+            src={`${HERO_VIDEO_LIGHT}#t=0.1`}
+            muted
+            playsInline
+            preload="auto"
+            controls={false}
+            disablePictureInPicture
+            aria-hidden={isDark}
+            aria-label={isDark ? undefined : "Cravon food delivery"}
+          />
+          <video
+            ref={heroDarkVideoRef}
+            className={`landing-panel__img landing-panel__video landing-mode-video landing-mode-video--dark ${
+              isDark ? "is-active" : ""
+            }`}
+            src={`${HERO_VIDEO_DARK}#t=0.1`}
+            muted
+            playsInline
+            preload="auto"
+            controls={false}
+            disablePictureInPicture
+            aria-hidden={!isDark}
+            aria-label={!isDark ? undefined : "Cravon food delivery"}
+          />
+        </div>
+        <div className="landing-panel__veil landing-panel__veil--hero" aria-hidden="true" />
+        <div className="landing-panel__content landing-panel__content--hero">
+          <h1 className="landing-hero-title">
+            <span className="landing-hero-title__line">
+              <span className="landing-hero-title__gold">Satisfy</span>
+              {" "}
+              <span className="landing-hero-title__white">Every</span>
+            </span>
+            <span className="landing-hero-title__line">
+              <span className="landing-hero-title__gold">Craving</span>
+            </span>
+          </h1>
+          <p className="landing-hero-desc">
+            <span className="landing-hero-desc__rule" aria-hidden="true" />
+            From local hidden gems to top-tier international cuisine — get all
+            your favorite dishes, fresh and on time.
+          </p>
+          <form
+            className="landing-hero-search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              goExplore();
+            }}
+          >
+            <div className="landing-hero-search__shell">
+              <FaSearch className="landing-hero-search__icon" aria-hidden="true" />
+              <input
+                type="search"
+                value={heroQuery}
+                onChange={(e) => setHeroQuery(e.target.value)}
+                placeholder="Search your nearest restaurants or dishes (Biryani, North Indian)..."
+                aria-label="Search your nearest restaurants or dishes"
+              />
+              <button type="submit" className="landing-hero-search__cta">
+                FIND FOOD
               </button>
             </div>
-
-            <div className="flex items-center gap-6 pt-3">
-              <div className="flex -space-x-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="h-10 w-10 overflow-hidden rounded-full border-2 border-app-surface bg-app-border"
-                  >
-                    <img
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=cravon-${i}`}
-                      alt="Customer"
-                    />
-                  </div>
-                ))}
-              </div>
-              <p className="text-sm text-app-secondary">
-                <span className="font-bold text-app-primary">10k+</span> happy foodies ordered today
-              </p>
-            </div>
-          </div>
-
-          <div className="relative">
-            <div className="overflow-hidden rounded-3xl border border-app-border/70 shadow-2xl">
-              <img
-                src="https://images.unsplash.com/photo-1543353071-873f17a7a088?auto=format&fit=crop&q=80&w=1200"
-                alt="Food preview"
-                className="h-auto w-full opacity-90"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-app-bg/50 to-transparent" />
-            </div>
-
-            <div className="landing-glass absolute -right-4 -top-4 z-20 flex items-center gap-3 rounded-2xl border border-app-border/60 p-4 shadow-xl">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15">
-                <FaShoppingBag className="text-emerald-500" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-app-secondary">Status</p>
-                <p className="font-bold text-app-primary">Order Delivered</p>
-              </div>
-            </div>
-
-            <div className="landing-glass absolute -bottom-8 -left-5 z-20 w-64 rounded-2xl border border-app-border/60 p-4 shadow-xl">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="font-bold text-app-primary">Hot Picks</p>
-                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-bold text-brand">New</span>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand/10 text-xl">🍕</div>
-                <div>
-                  <p className="text-sm font-bold text-app-primary">Truffle Pizza</p>
-                  <p className="text-xs text-app-secondary">$24.00 • 4.9 ★</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          </form>
         </div>
       </section>
 
-      <section className="border-y border-app-border/40 bg-app-surface py-20">
-        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-6 md:grid-cols-4 md:px-8">
-          {[
-            { icon: <FaShoppingBag className="text-brand" />, value: "2.5k+", label: "Restaurants" },
-            { icon: <FaUserFriends className="text-brand" />, value: "1.2M+", label: "Happy Users" },
-            { icon: <FaMapMarkerAlt className="text-brand" />, value: "50+", label: "Cities" },
-            { icon: <FaShieldAlt className="text-brand" />, value: "99.9%", label: "Success Rate" },
-          ].map((stat) => (
-            <div key={stat.label} className="text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft">
-                {stat.icon}
-              </div>
-              <p className="font-display text-3xl font-bold text-app-primary">{stat.value}</p>
-              <p className="mt-1 text-sm font-medium text-app-secondary">{stat.label}</p>
-            </div>
-          ))}
+      <section
+        ref={freshSectionRef}
+        className={`landing-panel landing-panel--fresh ${
+          freshScrollLocked ? "landing-panel--fresh-locked" : ""
+        }`}
+      >
+        <div className="landing-mode-media">
+          <video
+            ref={freshLightVideoRef}
+            className={`landing-panel__img landing-panel__video landing-mode-video landing-mode-video--light ${
+              !isDark ? "is-active" : ""
+            }`}
+            src={`${FRESH_VIDEO_LIGHT}#t=0.1`}
+            muted
+            playsInline
+            preload="auto"
+            controls={false}
+            disablePictureInPicture
+            aria-hidden={isDark}
+            aria-label={isDark ? undefined : "Fresh food near you"}
+          />
+          <video
+            ref={freshDarkVideoRef}
+            className={`landing-panel__img landing-panel__video landing-mode-video landing-mode-video--dark ${
+              isDark ? "is-active" : ""
+            }`}
+            src={`${FRESH_VIDEO_DARK}#t=0.1`}
+            muted
+            playsInline
+            preload="auto"
+            controls={false}
+            disablePictureInPicture
+            aria-hidden={!isDark}
+            aria-label={!isDark ? undefined : "Fresh food near you"}
+          />
         </div>
-      </section>
-
-      <section className="bg-app py-24">
-        <div className="mx-auto max-w-7xl px-6 md:px-8">
-          <div className="mx-auto mb-16 max-w-3xl space-y-4 text-center">
-            <h2 className="text-4xl font-bold text-app-primary md:text-5xl">
-              Everything you need in <span className="text-brand">one app</span>
+        <div className="landing-panel__content landing-panel__content--fresh">
+          <div className="landing-fresh-inner">
+            <h2 className="landing-fresh-title">
+              FRESH, HOT &amp; <span className="landing-fresh-title__accent">FAST</span>
             </h2>
-            <p className="text-app-secondary">Built for speed, precision, and a smoother food journey.</p>
-          </div>
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-            {featureCards.map((feature) => (
-              <div
-                key={feature.title}
-                className="rounded-3xl border border-app-border/60 bg-app-surface p-8 shadow-soft transition-transform hover:-translate-y-1"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-app">{feature.icon}</div>
-                <h3 className="mb-3 text-xl font-bold text-app-primary">{feature.title}</h3>
-                <p className="text-sm leading-relaxed text-app-secondary">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="relative overflow-hidden bg-brand px-6 py-24 md:px-8">
-        <div className="pointer-events-none absolute inset-0 bg-black/10" />
-        <div className="relative mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 lg:grid-cols-2">
-          <div className="space-y-8 text-white lg:pr-8">
-            <h2 className="text-5xl font-bold leading-tight md:text-6xl">
-              Not just another <span className="opacity-60">delivery app.</span>
-            </h2>
-            <p className="text-lg text-white/85">
-              We are building the intelligent commerce layer for food, helping users choose better and order together.
+            <p className="landing-fresh-desc">
+              Nearby kitchens. Real-time search. Food that arrives hot.
             </p>
-            <ul className="space-y-4">
-              {["AI-powered craving detector", "Live group cart sync", "Automatic bill splitting", "Dietary smart filters"].map((item) => (
-                <li key={item} className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
-                    <FaStar size={12} />
-                  </span>
-                  <span className="text-base font-semibold">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
 
-          <div className="space-y-8">
-            <div className="rounded-[2.2rem] bg-app-surface p-8 shadow-2xl">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand text-white">
-                <FaBrain size={24} />
-              </div>
-              <h3 className="mb-3 text-3xl font-bold text-app-primary">Let AI pick your meal</h3>
-              <p className="mb-6 text-app-secondary">
-                Tell us your mood, budget, and cravings. Cravon AI returns high-confidence meal matches in seconds.
-              </p>
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-app-border bg-app p-4 text-sm text-app-primary">
-                  "I want something spicy, high-protein, and under $15."
-                </div>
-                <div className="rounded-2xl border border-brand/20 bg-brand-soft p-4 text-sm font-semibold text-brand">
-                  Try Peri Peri Bowl from Spice Yard.
-                </div>
-              </div>
+            <div className="landing-fresh-cuisines" aria-label="Popular cuisines">
+              {freshCuisines.map((item) => (
+                <button
+                  key={item.query}
+                  type="button"
+                  className="landing-fresh-cuisine"
+                  onClick={() => goExplore(item.query)}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
 
-            <div className="rounded-[2.2rem] bg-slate-900 p-8 text-white shadow-2xl">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand text-white">
-                <FaUserFriends size={22} />
-              </div>
-              <h3 className="mb-3 text-3xl font-bold">Order together, effortlessly</h3>
-              <p className="mb-5 text-slate-300">
-                Shared carts for parties and office lunches with live updates and no manual reconciliation.
-              </p>
-              <div className="flex gap-2">
-                {[50, 70, 90].map((v) => (
-                  <div key={v} className="h-2.5 flex-1 rounded-full bg-white/15">
-                    <div className="h-full rounded-full bg-brand" style={{ width: `${v}%` }} />
-                  </div>
-                ))}
-              </div>
+            <div className="landing-fresh-actions">
+              <button
+                type="button"
+                onClick={goBrowseRestro}
+                className="landing-cta-red landing-pill"
+              >
+                Explore kitchens
+              </button>
+              <button
+                type="button"
+                onClick={() => goExplore()}
+                className="landing-pill landing-fresh-secondary"
+              >
+                Search dishes
+                <FaArrowRight size={12} aria-hidden="true" />
+              </button>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="bg-app-surface py-20">
-        <div className="mx-auto max-w-7xl px-6 text-center md:px-8">
-          <h2 className="mb-16 text-4xl font-bold text-app-primary">What our community says</h2>
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-            {[
-              {
-                name: "Sarah J.",
-                text: "The AI picks are crazy accurate. It feels like the app understands my mood.",
-                icon: "✨",
-              },
-              {
-                name: "Mark D.",
-                text: "Group ordering removed all our Friday lunch chaos.",
-                icon: "🍕",
-              },
-              {
-                name: "Elena R.",
-                text: "Fastest delivery and the cleanest food app UI I have used.",
-                icon: "🚀",
-              },
-            ].map((item) => (
-              <div
-                key={item.name}
-                className="rounded-[2rem] border border-app-border/60 bg-app p-8 text-center shadow-soft"
-              >
-                <div className="mb-5 text-4xl">{item.icon}</div>
-                <p className="mb-5 italic text-app-secondary">"{item.text}"</p>
-                <p className="font-bold text-app-primary">{item.name}</p>
-                <div className="mt-2 flex justify-center gap-1 text-primary">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <FaStar key={n} size={13} />
-                  ))}
-                </div>
-              </div>
-            ))}
+      <section
+        ref={uniqueRef}
+        className={`landing-unique ${uniqueVisible ? "is-visible" : ""}`}
+        aria-labelledby="landing-unique-title"
+      >
+        <div className="landing-unique__bg" aria-hidden="true">
+          <img
+            src={UNIQUE_BG_LIGHT}
+            alt=""
+            className={`landing-unique__bg-img ${!isDark ? "is-active" : ""}`}
+          />
+          <img
+            src={UNIQUE_BG_DARK}
+            alt=""
+            className={`landing-unique__bg-img ${isDark ? "is-active" : ""}`}
+          />
+        </div>
+
+        <div className="landing-unique__inner">
+          <div className="landing-unique__copy">
+            <h2 id="landing-unique-title" className="landing-unique__title">
+              <span className="landing-unique__title-top">
+                Not just <em>another</em>
+              </span>
+              <span className="landing-unique__title-gold">
+                food website.
+                <svg
+                  className="landing-unique__swash"
+                  viewBox="0 0 300 20"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <path d="M4 14 C 70 4, 150 4, 296 10" />
+                </svg>
+              </span>
+            </h2>
+            <p className="landing-unique__desc">
+              <span className="landing-unique__desc-rule" aria-hidden="true" />
+              The intelligent layer for food
+            </p>
+            <button
+              type="button"
+              onClick={goBrowseRestro}
+              className="landing-nav-cta landing-pill landing-everything__btn landing-unique__cta"
+            >
+              Try Cravon
+              <FaArrowRight size={13} aria-hidden="true" />
+            </button>
           </div>
 
-          <div className="mt-20 rounded-[2.6rem] bg-slate-900 px-8 py-14 text-left text-white md:px-14">
-            <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
-              <div>
-                <h3 className="mb-4 text-4xl font-bold">Grow Your Restaurant with Cravon</h3>
-                <p className="mb-7 text-slate-300">
-                  Reach more customers, unlock performance analytics, and manage orders with confidence.
-                </p>
-                <Link
-                  to="/partner"
-                  className="inline-flex items-center gap-2 rounded-2xl bg-brand px-7 py-3.5 font-semibold text-white transition-colors hover:bg-brand-dark"
-                >
-                  Register Your Restaurant
-                  <FaChevronRight size={12} />
-                </Link>
+          <div className="landing-unique__cards">
+            <article className="landing-unique-card landing-unique-card--ai">
+              <div className="landing-unique-card__head">
+                <span className="landing-unique-card__icon">
+                  <FaBrain size={17} aria-hidden="true" />
+                </span>
+                <span className="landing-unique-card__tag">Cravon AI</span>
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {[
-                  "Reach millions of food lovers",
-                  "Real-time dashboard analytics",
-                  "Menu and inventory controls",
-                  "Reliable logistics coverage",
-                ].map((point) => (
-                  <div key={point} className="rounded-xl bg-white/5 p-4 text-sm text-slate-200">
-                    {point}
+              <h3 className="landing-unique-card__title">Let AI Pick Your Meal</h3>
+              <p className="landing-unique-card__desc">
+                Tell us your mood, budget and cravings. Cravon AI returns high-confidence
+                meal matches in seconds.
+              </p>
+              <div className="landing-unique-chat">
+                <p className="landing-unique-chat__user">
+                  &ldquo;Something spicy, high-protein and under ₹300.&rdquo;
+                </p>
+                <div className="landing-unique-chat__ai">
+                  <span className="landing-unique-chat__spark" aria-hidden="true">
+                    <FaMagic size={11} />
+                  </span>
+                  <p>
+                    Try the <strong>Peri Peri Bowl</strong> from Spice Yard
+                  </p>
+                  <span className="landing-unique-chat__match">94% match</span>
+                </div>
+              </div>
+            </article>
+
+            <article className="landing-unique-card landing-unique-card--group">
+              <div className="landing-unique-card__head">
+                <span className="landing-unique-card__icon">
+                  <FaUserFriends size={17} aria-hidden="true" />
+                </span>
+                <div className="landing-unique-card__avatars" aria-hidden="true">
+                  {groupMembers.map((m) => (
+                    <span key={m.name}>{m.initial}</span>
+                  ))}
+                  <span className="is-more">+2</span>
+                </div>
+              </div>
+              <h3 className="landing-unique-card__title">Order Together, Effortlessly</h3>
+              <p className="landing-unique-card__desc">
+                Shared carts for parties and office lunches — live updates, zero manual
+                reconciliation.
+              </p>
+              <div className="landing-unique-group">
+                {groupMembers.map((m) => (
+                  <div key={m.name} className="landing-unique-group__row">
+                    <span className="landing-unique-group__name">{m.name}</span>
+                    <span className="landing-unique-group__track">
+                      <span
+                        className="landing-unique-group__fill"
+                        style={{ "--fill": `${m.fill}%` }}
+                      />
+                    </span>
                   </div>
                 ))}
               </div>
+              <p className="landing-unique-group__split">
+                Bill split automatically: <strong>₹412 each</strong>
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section
+        ref={everythingRef}
+        className={`landing-everything ${everythingVisible ? "is-visible" : ""}`}
+        aria-labelledby="landing-everything-title"
+      >
+        <div className="landing-everything__bg" aria-hidden="true">
+          <img
+            src={EVERYTHING_BG_LIGHT}
+            alt=""
+            className={`landing-everything__bg-img ${!isDark ? "is-active" : ""}`}
+          />
+          <img
+            src={EVERYTHING_BG_DARK}
+            alt=""
+            className={`landing-everything__bg-img ${isDark ? "is-active" : ""}`}
+          />
+        </div>
+        <div className="landing-everything__inner">
+          <header className="landing-everything__head">
+            <p className="landing-everything__eyebrow">
+              <span className="landing-everything__rule" aria-hidden="true" />
+              Why Cravon
+              <span className="landing-everything__rule" aria-hidden="true" />
+            </p>
+            <h2 id="landing-everything-title" className="landing-everything__title">
+              Everything you need{" "}
+              <span className="landing-everything__title-gold">in one place</span>
+            </h2>
+            <p className="landing-everything__sub">
+              Built for speed, precision and a smoother food journey — from the first
+              craving to the last bite.
+            </p>
+          </header>
+
+          <div className="landing-everything__grid">
+            {everythingFeatures.map(({ icon: Icon, title, desc, soon }, i) => (
+              <article
+                key={title}
+                className="landing-feature-card"
+                style={{ "--reveal-delay": `${i * 70}ms` }}
+              >
+                <span className="landing-feature-card__icon">
+                  <Icon size={18} aria-hidden="true" />
+                </span>
+                <h3 className="landing-feature-card__title">
+                  {title}
+                  {soon ? <span className="landing-feature-card__soon">Soon</span> : null}
+                </h3>
+                <p className="landing-feature-card__desc">{desc}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section
+        ref={partnerRef}
+        className={`landing-partner ${partnerVisible ? "is-visible" : ""}`}
+        aria-labelledby="landing-partner-title"
+      >
+        <div className="landing-partner__bg" aria-hidden="true">
+          <img
+            src={PARTNER_BG_LIGHT}
+            alt=""
+            className={`landing-partner__bg-img ${!isDark ? "is-active" : ""}`}
+          />
+          <img
+            src={PARTNER_BG_DARK}
+            alt=""
+            className={`landing-partner__bg-img ${isDark ? "is-active" : ""}`}
+          />
+        </div>
+
+        <div className="landing-partner__inner">
+          <div className="landing-partner__lead">
+            <p className="landing-partner__eyebrow">
+              <span className="landing-partner__eyebrow-rule" aria-hidden="true" />
+              For restaurant partners
+              <span
+                className="landing-partner__eyebrow-rule landing-partner__eyebrow-rule--end"
+                aria-hidden="true"
+              />
+            </p>
+            <h2 id="landing-partner-title" className="landing-partner__title">
+              <span className="landing-partner__title-top">Own a kitchen?</span>
+              <span className="landing-partner__title-gold">
+                Partner with Cravon.
+                <svg
+                  className="landing-partner__swash"
+                  viewBox="0 0 300 20"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <path d="M4 14 C 70 4, 150 4, 296 10" />
+                </svg>
+              </span>
+            </h2>
+          </div>
+
+          <div className="landing-partner__side">
+            <p className="landing-partner__sub">
+              List your menu, reach hungry customers nearby and grow with live order tools.
+            </p>
+            <div className="landing-partner__actions">
+              <Link to="/partner" className="landing-nav-cta landing-pill landing-partner__btn">
+                Partner With Us
+                <FaArrowRight size={12} aria-hidden="true" />
+              </Link>
+              <button
+                type="button"
+                onClick={openAuth}
+                className="landing-pill landing-partner__btn landing-partner__btn--ghost"
+              >
+                Join Now
+              </button>
             </div>
           </div>
         </div>

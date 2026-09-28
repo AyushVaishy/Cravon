@@ -1,4 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
+import { cartLineKey } from '../utils/cartUtils';
 
 const CART_STORAGE_KEY = 'cravon_cart';
 
@@ -15,32 +16,44 @@ const persistCartItems = (items) => {
   try {
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
   } catch {
-    /* ignore quota errors */
+    /* ignore */
   }
 };
 
-// Cart item shape: { id, name, price, isVeg, restaurantId, restaurantName, imageUrl, quantity }
 const cartSlice = createSlice({
   name: 'cart',
-  initialState: {
-    items: loadCartItems(),
-  },
+  initialState: { items: loadCartItems() },
   reducers: {
     addItem: (state, action) => {
       const newItem = action.payload;
-      if (state.items.length > 0 && state.items[0].restaurantId !== newItem.restaurantId) {
-        state.items = [];
-      }
-      const existing = state.items.find((item) => item.id === newItem.id);
+      const menuItemId = newItem.menuItemId || newItem.id;
+      const lineKey = cartLineKey({ ...newItem, menuItemId });
+      const maxQty = newItem.maxQty || 10;
+
+      const existing = state.items.find((item) => cartLineKey(item) === lineKey);
+      const qtyToAdd = newItem.quantity || 1;
+
       if (existing) {
-        existing.quantity += 1;
+        existing.quantity = Math.min(existing.quantity + qtyToAdd, maxQty);
       } else {
-        state.items.push({ ...newItem, quantity: 1 });
+        state.items.push({
+          ...newItem,
+          menuItemId,
+          id: menuItemId,
+          lineKey,
+          quantity: Math.min(qtyToAdd, maxQty),
+        });
       }
       persistCartItems(state.items);
     },
     removeItem: (state, action) => {
-      state.items = state.items.filter((item) => item.id !== action.payload);
+      const key = action.payload;
+      state.items = state.items.filter((item) => cartLineKey(item) !== key && item.lineKey !== key && item.id !== key);
+      persistCartItems(state.items);
+    },
+    clearRestaurantItems: (state, action) => {
+      const restaurantId = action.payload;
+      state.items = state.items.filter((item) => item.restaurantId !== restaurantId);
       persistCartItems(state.items);
     },
     clearCart: () => {
@@ -48,16 +61,17 @@ const cartSlice = createSlice({
       return { items: [] };
     },
     updateQuantity: (state, action) => {
-      const { id, quantity } = action.payload;
-      const item = state.items.find((i) => i.id === id);
-      if (item) {
-        item.quantity = quantity;
-      }
+      const { lineKey, id, quantity, maxQty = 10 } = action.payload;
+      const item = state.items.find((i) => i.lineKey === lineKey || cartLineKey(i) === lineKey || i.id === id);
+      if (item) item.quantity = Math.min(Math.max(1, quantity), maxQty);
+      persistCartItems(state.items);
+    },
+    setCart: (state, action) => {
+      state.items = action.payload || [];
       persistCartItems(state.items);
     },
   },
 });
 
-export const { addItem, removeItem, clearCart, updateQuantity } = cartSlice.actions;
-
+export const { addItem, removeItem, clearRestaurantItems, clearCart, updateQuantity, setCart } = cartSlice.actions;
 export default cartSlice.reducer;

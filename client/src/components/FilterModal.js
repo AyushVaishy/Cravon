@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FaTimes, FaSearch, FaLeaf } from 'react-icons/fa';
-import { SORT_OPTIONS, RATING_OPTIONS, COST_OPTIONS, DELIVERY_TIME_OPTIONS } from '../store/filtersSlice';
+import { SORT_OPTIONS, RATING_OPTIONS, COST_OPTIONS, DELIVERY_TIME_OPTIONS, DISTANCE_OPTIONS } from '../store/filtersSlice';
 
 const LEFT_PANELS = [
   { id: 'sort',         label: 'Sort by' },
@@ -8,6 +8,7 @@ const LEFT_PANELS = [
   { id: 'rating',       label: 'Rating' },
   { id: 'cost',         label: 'Cost for two' },
   { id: 'deliveryTime', label: 'Delivery Time' },
+  { id: 'distance',     label: 'Distance' },
 ];
 
 const panelHasValue = (id, pending) => {
@@ -16,6 +17,7 @@ const panelHasValue = (id, pending) => {
   if (id === 'rating')       return pending.rating !== null;
   if (id === 'cost')         return pending.costRange !== null;
   if (id === 'deliveryTime') return pending.deliveryTimeMax !== null;
+  if (id === 'distance')     return pending.maxDistance !== null;
   return false;
 };
 
@@ -46,7 +48,12 @@ const FilterModal = ({ isOpen, onClose, onApply, current, allCuisines }) => {
   }, [isOpen]); // deliberately exclude `current` — only sync on open
 
   const handleClear = useCallback(() => {
-    setPending({ sortBy: 'popularity', cuisines: [], rating: null, costRange: null, vegOnly: false, deliveryTimeMax: null });
+    setPending({
+      sortBy: 'popularity', cuisines: [], rating: null, costRange: null,
+      vegOnly: false, nonVegOnly: false, pureVeg: false, openNowOnly: false,
+      hasOffers: false, freeDelivery: false, maxDistance: null,
+      acceptsOnlinePayment: false, newRestaurants: false, deliveryTimeMax: null,
+    });
   }, []);
 
   const handleApply = useCallback(() => {
@@ -280,18 +287,30 @@ const FilterModal = ({ isOpen, onClose, onApply, current, allCuisines }) => {
                       className="flex items-center gap-3 cursor-pointer group"
                       onClick={() => setPending((p) => ({ ...p, deliveryTimeMax: opt.value }))}
                     >
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                          selected
-                            ? 'border-primary bg-primary/50'
-                            : 'border-border group-hover:border-primary/40'
-                        }`}
-                      >
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${selected ? 'border-primary bg-primary/50' : 'border-border group-hover:border-primary/40'}`}>
                         {selected && <div className="w-2 h-2 rounded-full bg-white" />}
                       </div>
-                      <span className={`text-sm ${selected ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                        {opt.label}
-                      </span>
+                      <span className={`text-sm ${selected ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{opt.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {activePanel === 'distance' && (
+              <div className="space-y-4">
+                {DISTANCE_OPTIONS.map((opt) => {
+                  const selected = pending.maxDistance === opt.value;
+                  return (
+                    <label
+                      key={String(opt.value)}
+                      className="flex items-center gap-3 cursor-pointer group"
+                      onClick={() => setPending((p) => ({ ...p, maxDistance: opt.value }))}
+                    >
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${selected ? 'border-primary bg-primary/50' : 'border-border group-hover:border-primary/40'}`}>
+                        {selected && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+                      <span className={`text-sm ${selected ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{opt.label}</span>
                     </label>
                   );
                 })}

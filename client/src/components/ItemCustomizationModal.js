@@ -107,8 +107,32 @@ const ItemCustomizationModal = ({ item, restaurantName, onClose, onConfirm }) =>
     });
   };
 
+  const [itemNotes, setItemNotes] = useState("");
+
+  const buildCustomizationLabels = () => {
+    const labels = {};
+    groups.forEach((g) => {
+      if (g.type === "radio" && selections[g.id]) {
+        const opt = g.options.find((o) => o.id === selections[g.id]);
+        if (opt) labels[g.title] = opt.label;
+      }
+      if (g.type === "checkbox" && selections[g.id]?.length) {
+        labels[g.title] = selections[g.id]
+          .map((sid) => g.options.find((o) => o.id === sid)?.label)
+          .filter(Boolean);
+      }
+    });
+    return labels;
+  };
+
   const handleConfirm = () => {
-    onConfirm(item, qty, selections);
+    const customizationLabels = buildCustomizationLabels();
+    onConfirm(item, qty, {
+      customizations: selections,
+      customizationLabels,
+      unitPrice: item.price + extraPrice,
+      itemNotes: itemNotes.trim() || null,
+    });
   };
 
   return (
@@ -243,6 +267,18 @@ const ItemCustomizationModal = ({ item, restaurantName, onClose, onConfirm }) =>
             ))}
           </div>
         )}
+
+        <div className="mb-4">
+          <label className="text-sm font-semibold text-foreground block mb-1.5">Special instructions (optional)</label>
+          <input
+            type="text"
+            value={itemNotes}
+            onChange={(e) => setItemNotes(e.target.value)}
+            placeholder="e.g. less spicy, no onion"
+            className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            maxLength={120}
+          />
+        </div>
 
         {/* Quantity selector */}
         <div className="flex items-center justify-between mb-5">

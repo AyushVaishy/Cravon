@@ -24,14 +24,314 @@
     <link rel="shortcut icon" type="image/png" href="/cravon_light_mode_icon.png?v=2" />
     <link rel="icon" type="image/png" media="(prefers-color-scheme: dark)" href="/cravon_dark_mode_icon.png?v=2" />
     <link rel="apple-touch-icon" href="/cravon_light_mode_icon.png?v=2" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
 
-    <link rel="stylesheet" href="./index.css" />
+    <style>
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: #FFF8F3;
+      }
+      html.dark, html.dark body {
+        background: #121212;
+      }
+
+      #root {
+        min-height: 100vh;
+      }
+
+      /* Boot splash — replaced when React mounts */
+      .cravon-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(ellipse 70% 50% at 50% 35%, rgba(255, 122, 26, 0.16), transparent 70%),
+          radial-gradient(ellipse 50% 40% at 80% 80%, rgba(46, 196, 182, 0.1), transparent 65%),
+          #FFF8F3;
+        font-family: "Manrope", system-ui, sans-serif;
+        color: #1F1F1F;
+        overflow: hidden;
+      }
+      html.dark .cravon-boot {
+        background:
+          radial-gradient(ellipse 70% 50% at 50% 35%, rgba(255, 140, 66, 0.18), transparent 70%),
+          radial-gradient(ellipse 50% 40% at 80% 80%, rgba(61, 218, 215, 0.08), transparent 65%),
+          #121212;
+        color: #F5F5F5;
+      }
+
+      .cravon-boot__glow {
+        position: absolute;
+        width: 280px;
+        height: 280px;
+        border-radius: 50%;
+        background: rgba(255, 122, 26, 0.12);
+        filter: blur(40px);
+        animation: boot-pulse 2.4s ease-in-out infinite;
+        pointer-events: none;
+      }
+      html.dark .cravon-boot__glow {
+        background: rgba(255, 140, 66, 0.15);
+      }
+
+      .cravon-boot__stage {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.75rem;
+        padding: 1.5rem;
+        text-align: center;
+      }
+
+      .cravon-boot__mark {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+      }
+
+      .cravon-boot__logo {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        object-fit: contain;
+        animation: boot-bob 1.6s ease-in-out infinite;
+      }
+
+      .cravon-boot__word {
+        font-family: "Sora", "Manrope", system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 1.65rem;
+        letter-spacing: -0.04em;
+        margin: 0;
+      }
+      .cravon-boot__word span {
+        color: #FF7A1A;
+      }
+
+      .cravon-boot__scene {
+        position: relative;
+        width: min(320px, 82vw);
+        height: 120px;
+      }
+
+      .cravon-boot__road {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 18px;
+        height: 4px;
+        border-radius: 999px;
+        background: repeating-linear-gradient(
+          90deg,
+          #FF7A1A 0 18px,
+          transparent 18px 30px
+        );
+        opacity: 0.35;
+        animation: boot-road 0.7s linear infinite;
+      }
+      html.dark .cravon-boot__road {
+        opacity: 0.45;
+      }
+
+      .cravon-boot__road-base {
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        bottom: 14px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(46, 196, 182, 0.18);
+      }
+      html.dark .cravon-boot__road-base {
+        background: rgba(61, 218, 215, 0.14);
+      }
+
+      .cravon-boot__scooter {
+        position: absolute;
+        bottom: 22px;
+        left: 0;
+        width: 92px;
+        height: 64px;
+        animation: boot-ride 2.2s ease-in-out infinite;
+      }
+
+      .cravon-boot__steam {
+        position: absolute;
+        top: 4px;
+        right: 6px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #FF7A1A;
+        opacity: 0.55;
+        animation: boot-steam 1.4s ease-out infinite;
+      }
+      .cravon-boot__steam--2 {
+        right: 16px;
+        animation-delay: 0.35s;
+      }
+      .cravon-boot__steam--3 {
+        right: 26px;
+        animation-delay: 0.7s;
+      }
+
+      .cravon-boot__copy h2 {
+        font-family: "Sora", "Manrope", system-ui, sans-serif;
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0 0 0.35rem;
+      }
+
+      .cravon-boot__copy p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: #6B6B6B;
+        font-weight: 500;
+      }
+      html.dark .cravon-boot__copy p {
+        color: #B0B0B0;
+      }
+
+      .cravon-boot__bar {
+        width: min(200px, 55vw);
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(255, 122, 26, 0.15);
+        overflow: hidden;
+      }
+      html.dark .cravon-boot__bar {
+        background: rgba(255, 140, 66, 0.2);
+      }
+
+      .cravon-boot__bar-fill {
+        height: 100%;
+        width: 40%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #FF7A1A, #FFD166, #2EC4B6);
+        animation: boot-bar 1.5s ease-in-out infinite;
+      }
+
+      @keyframes boot-ride {
+        0%   { transform: translateX(-8%) translateY(0); }
+        25%  { transform: translateX(28%) translateY(-3px); }
+        50%  { transform: translateX(62%) translateY(0); }
+        75%  { transform: translateX(88%) translateY(-2px); }
+        100% { transform: translateX(108%) translateY(0); }
+      }
+      @keyframes boot-road {
+        from { background-position: 0 0; }
+        to   { background-position: -30px 0; }
+      }
+      @keyframes boot-steam {
+        0%   { transform: translateY(0) scale(1); opacity: 0.55; }
+        100% { transform: translateY(-22px) scale(0.4); opacity: 0; }
+      }
+      @keyframes boot-bob {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-4px); }
+      }
+      @keyframes boot-pulse {
+        0%, 100% { transform: scale(1); opacity: 0.7; }
+        50%      { transform: scale(1.15); opacity: 1; }
+      }
+      @keyframes boot-bar {
+        0%   { transform: translateX(-120%); }
+        100% { transform: translateX(320%); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .cravon-boot__scooter,
+        .cravon-boot__road,
+        .cravon-boot__steam,
+        .cravon-boot__logo,
+        .cravon-boot__glow,
+        .cravon-boot__bar-fill {
+          animation: none !important;
+        }
+        .cravon-boot__scooter {
+          left: 50%;
+          transform: translateX(-50%);
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root">
-      <h1>Not Rendered</h1>
+      <div class="cravon-boot" role="status" aria-live="polite" aria-label="Loading Cravon">
+        <div class="cravon-boot__glow" aria-hidden="true"></div>
+        <div class="cravon-boot__stage">
+          <div class="cravon-boot__mark">
+            <img
+              class="cravon-boot__logo"
+              src="/cravon_light_mode_icon.png?v=2"
+              alt=""
+              width="44"
+              height="44"
+            />
+            <p class="cravon-boot__word">Cra<span>von</span></p>
+          </div>
+
+          <div class="cravon-boot__scene" aria-hidden="true">
+            <div class="cravon-boot__road-base"></div>
+            <div class="cravon-boot__road"></div>
+            <div class="cravon-boot__scooter">
+              <span class="cravon-boot__steam"></span>
+              <span class="cravon-boot__steam cravon-boot__steam--2"></span>
+              <span class="cravon-boot__steam cravon-boot__steam--3"></span>
+              <svg viewBox="0 0 120 80" fill="none" xmlns="http://www.w3.org/2000/svg" width="92" height="64">
+                <circle cx="28" cy="58" r="12" fill="#1F1F1F" />
+                <circle cx="28" cy="58" r="5" fill="#FFD166" />
+                <circle cx="88" cy="58" r="12" fill="#1F1F1F" />
+                <circle cx="88" cy="58" r="5" fill="#FFD166" />
+                <path d="M22 48h52c2 0 4 1.5 4 4v2H26c-2 0-4-1.5-4-4v-2z" fill="#2EC4B6" />
+                <path d="M74 48L92 22" stroke="#1F1F1F" stroke-width="4" stroke-linecap="round" />
+                <path d="M84 20h16" stroke="#1F1F1F" stroke-width="4" stroke-linecap="round" />
+                <rect x="34" y="22" width="28" height="26" rx="5" fill="#FF7A1A" />
+                <path d="M40 22v-6c0-4 3-7 8-7s8 3 8 7v6" stroke="#FF7A1A" stroke-width="3" fill="none" />
+                <text x="48" y="40" text-anchor="middle" fill="#fff" font-family="Sora,sans-serif" font-size="11" font-weight="800">C</text>
+                <circle cx="58" cy="16" r="6" fill="#FFD166" />
+                <path d="M52 28c2-6 12-6 14 0" stroke="#1F1F1F" stroke-width="3" stroke-linecap="round" fill="none" />
+                <path d="M8 42h10M4 50h8M10 58h6" stroke="#FF7A1A" stroke-width="2.5" stroke-linecap="round" opacity="0.55" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="cravon-boot__copy">
+            <h2>Heating up your cravings</h2>
+            <p>Finding nearby kitchens…</p>
+          </div>
+
+          <div class="cravon-boot__bar" aria-hidden="true">
+            <div class="cravon-boot__bar-fill"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script type="module" src="./src/App.js"></script>
+    <script>
+      (function () {
+        try {
+          if (document.documentElement.classList.contains('dark')) {
+            var img = document.querySelector('.cravon-boot__logo');
+            if (img) img.src = '/cravon_dark_mode_icon.png?v=2';
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+<!-- <script
+  src="http://localhost:3000/widget.js"
+  data-api-base="http://localhost:5000/api/v2"
+  data-chatbot-key="cmtv540cw0001fnkcbi7rcyvd"
+  data-api-key="atk_QvX49D9-WHqyi9y583qEJoJAKk7RgREp"
+  data-widget="%7B%22layout%22%3A%22side%22%2C%22shape%22%3A%22circle%22%2C%22position%22%3A%22bottom-right%22%2C%22accentColor%22%3A%22%232563eb%22%2C%22greeting%22%3A%22Ask%20anything!!%22%2C%22greetings%22%3A%5B%22Ask%20anything!!%22%2C%22Need%20a%20hand%3F%22%2C%22Chat%20with%20us%22%2C%22Got%20a%20question%3F%22%5D%2C%22welcomeMessage%22%3A%22Hi!%20How%20can%20I%20help%20you%20today%3F%22%2C%22launcherSize%22%3A%22md%22%2C%22launcherScale%22%3A0.99%2C%22showGreeting%22%3Atrue%2C%22panelScale%22%3A1%2C%22videoScale%22%3A0.99%2C%22chatScale%22%3A1.01%2C%22chatStartOpen%22%3Afalse%2C%22voiceEnabled%22%3Atrue%2C%22soundOnOpen%22%3Afalse%2C%22name%22%3A%22Athena%20LMS%20Chatbot%22%2C%22portrait%22%3A%22http%3A%2F%2Flocalhost%3A3000%2Fsrc%2Fassets%2Fimages%2Fdashboard_avatar.jpg%22%7D"
+  async></script> -->
   </body>
 </html>

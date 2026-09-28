@@ -5,12 +5,21 @@ import LandingLayout from "../components/landing/LandingLayout";
 const ContactLandingPage = () => {
   return (
     <LandingLayout>
-      <div className="mx-auto max-w-7xl px-6 pb-24 pt-32 md:px-8">
+      <div className="landing-page-hero pt-28">
+        <div className="mx-auto max-w-7xl px-5 md:px-8">
+          <p className="mb-3 font-display text-sm font-semibold tracking-[0.22em] text-[#E31837] uppercase">
+            — Contact —
+          </p>
+        </div>
+      </div>
+      <div className="mx-auto max-w-7xl px-5 pb-24 pt-6 md:px-8">
         <div className="grid grid-cols-1 gap-20 lg:grid-cols-2">
           <div className="space-y-12">
             <div className="space-y-5">
-              <h1 className="text-6xl font-bold text-app-primary">Get in touch</h1>
-              <p className="text-lg text-app-secondary">
+              <h1 className="font-display text-6xl font-extrabold tracking-tight text-[#1F1F1F] dark:text-white">
+                Get in touch
+              </h1>
+              <p className="text-lg text-[#6B6B6B] dark:text-white/65">
                 Have questions? Reach out to our support team anytime. We are here to help.
               </p>
             </div>

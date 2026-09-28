@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import DashboardSidebar from "../components/dashboard/DashboardSidebar";
 import DashboardTopBar from "../components/dashboard/DashboardTopBar";
+import DashboardCartPanel from "../components/dashboard/DashboardCartPanel";
 import LocationPanel from "../components/LocationPanel";
-// import ChatWidget from "../components/ChatWidget";
 import SignInSidebar from "../components/SignInSidebar";
 import { loadBrowseLocation, saveBrowseLocation } from "../utils/locationStorage";
 
 const DashboardLayout = () => {
+  const routeLocation = useLocation();
   const [location, setLocation] = useState(loadBrowseLocation);
   const [isDark, setIsDark] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
@@ -49,17 +50,26 @@ const DashboardLayout = () => {
     return () => window.removeEventListener("openSignIn", handler);
   }, []);
 
+  // Hide floating cart panel on full cart / checkout page to avoid duplication
+  const hideCartPanel = routeLocation.pathname.startsWith("/home/cart");
+
   return (
     <div className="dashboard-root flex h-screen overflow-hidden">
       <DashboardSidebar isDark={isDark} />
 
-      <div className="flex-1 flex flex-col overflow-hidden md:ml-[96px] md:mr-[16px] mb-16 md:mb-0">
+      <div
+        className={`flex-1 flex flex-col overflow-hidden min-w-0 md:ml-[88px] mb-16 md:mb-0 ${
+          hideCartPanel ? "xl:mr-4" : "xl:mr-0"
+        }`}
+      >
         <DashboardTopBar location={location} isDark={isDark} toggleTheme={toggleTheme} />
 
         <main className="flex-1 overflow-y-auto scrollbar-hide">
           <Outlet context={{ location, setLocation: handleSetLocation }} />
         </main>
       </div>
+
+      {!hideCartPanel && <DashboardCartPanel location={location} />}
 
       <LocationPanel
         isOpen={locationOpen}
@@ -68,7 +78,6 @@ const DashboardLayout = () => {
         setLocation={handleSetLocation}
       />
       <SignInSidebar isOpen={signInOpen} onClose={() => setSignInOpen(false)} initialTab={signInTab} />
-      {/* <ChatWidget /> */}
     </div>
   );
 };

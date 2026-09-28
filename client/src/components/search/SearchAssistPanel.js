@@ -1,4 +1,5 @@
-import { FaClock, FaFire, FaMicrophone, FaSearch } from "react-icons/fa";
+import { FaClock, FaFire, FaHistory, FaMicrophone, FaSearch } from "react-icons/fa";
+import { Link } from "react-router-dom";
 
 const SearchAssistPanel = ({
   recent = [],
@@ -10,6 +11,7 @@ const SearchAssistPanel = ({
   onVoiceStart,
   listening = false,
   showVoiceHint = true,
+  showHistoryLink = true,
 }) => (
   <div className="py-2">
     {showVoiceHint && voiceSupported && (
@@ -36,9 +38,16 @@ const SearchAssistPanel = ({
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
             <FaClock size={10} /> Recent
           </p>
-          <button type="button" onClick={onClearRecent} className="text-[11px] text-primary font-semibold hover:underline">
-            Clear
-          </button>
+          <div className="flex items-center gap-3">
+            {showHistoryLink && (
+              <Link to="/home/search/history" className="text-[11px] text-primary font-semibold hover:underline flex items-center gap-1">
+                <FaHistory size={10} /> All history
+              </Link>
+            )}
+            <button type="button" onClick={onClearRecent} className="text-[11px] text-primary font-semibold hover:underline">
+              Clear
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           {recent.map((term) => (
@@ -90,6 +99,11 @@ const SearchAssistPanel = ({
       <div className="px-4 py-6 text-center text-sm text-muted-foreground">
         <FaSearch className="mx-auto mb-2 opacity-40" />
         Search restaurants, cuisines, or dishes
+        {showHistoryLink && (
+          <Link to="/home/search/history" className="block mt-3 text-primary font-semibold hover:underline">
+            View search history
+          </Link>
+        )}
       </div>
     )}
   </div>

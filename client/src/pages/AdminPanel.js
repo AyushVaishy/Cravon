@@ -5,6 +5,7 @@ import {
   getAdminUsers,
   getAdminRestaurants,
   approveRestaurant,
+  toggleFeaturedRestaurant,
   getAdminOrders,
   updateAdminOrderStatus,
 } from '../services/adminService';
@@ -40,6 +41,7 @@ const AdminPanel = () => {
   const [ordersLoading, setOrdersLoading] = useState(false);
 
   const [approvingId, setApprovingId] = useState(null);
+  const [featuringId, setFeaturingId] = useState(null);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
 
   useEffect(() => {
@@ -104,6 +106,18 @@ const AdminPanel = () => {
       );
     } catch { toast.error('Failed to update restaurant'); }
     finally { setApprovingId(null); }
+  };
+
+  const handleFeatured = async (id, featured) => {
+    setFeaturingId(id);
+    try {
+      await toggleFeaturedRestaurant(id, featured);
+      toast.success(featured ? 'Restaurant featured on home' : 'Removed from featured');
+      setRestaurants((prev) =>
+        prev.map((r) => r.id === id ? { ...r, isFeatured: featured } : r)
+      );
+    } catch { toast.error('Failed to update featured status'); }
+    finally { setFeaturingId(null); }
   };
 
   const handleStatusChange = async (orderId, status) => {
@@ -249,6 +263,7 @@ const AdminPanel = () => {
                       <th className="text-left px-6 py-3 text-muted-foreground font-medium">Owner</th>
                       <th className="text-left px-6 py-3 text-muted-foreground font-medium">Orders</th>
                       <th className="text-left px-6 py-3 text-muted-foreground font-medium">Approved</th>
+                      <th className="text-left px-6 py-3 text-muted-foreground font-medium">Featured</th>
                       <th className="text-left px-6 py-3 text-muted-foreground font-medium">Open</th>
                       <th className="text-left px-6 py-3 text-muted-foreground font-medium">Actions</th>
                     </tr>
@@ -268,11 +283,18 @@ const AdminPanel = () => {
                           )}
                         </td>
                         <td className="px-6 py-4">
+                          {r.isFeatured ? (
+                            <span className="text-amber-600 font-semibold text-xs">⭐ Featured</span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${r.isOpen ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-muted text-muted-foreground dark:text-muted-foreground'}`}>
                             {r.isOpen ? 'Open' : 'Closed'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 flex items-center gap-2">
+                        <td className="px-6 py-4 flex flex-wrap items-center gap-2">
                           {!r.isApproved ? (
                             <button
                               onClick={() => handleApprove(r.id, true)}
@@ -288,6 +310,19 @@ const AdminPanel = () => {
                               className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
                             >
                               Reject
+                            </button>
+                          )}
+                          {r.isApproved && (
+                            <button
+                              onClick={() => handleFeatured(r.id, !r.isFeatured)}
+                              disabled={featuringId === r.id}
+                              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
+                                r.isFeatured
+                                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                  : 'bg-primary/10 text-primary hover:bg-primary/20'
+                              }`}
+                            >
+                              {r.isFeatured ? 'Unfeature' : 'Feature'}
                             </button>
                           )}
                         </td>

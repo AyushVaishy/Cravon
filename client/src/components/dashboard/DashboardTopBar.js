@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
 import { FaSearch, FaMapMarkerAlt, FaChevronDown, FaMicrophone } from "react-icons/fa";
 import { FiSun, FiMoon, FiBell } from "react-icons/fi";
 import SearchAssistPanel from "../search/SearchAssistPanel";
@@ -11,17 +12,30 @@ import {
   removeRecentSearch,
   clearRecentSearches,
 } from "../../utils/searchStorage";
+import {
+  selectNotifications,
+  selectUnreadCount,
+  markAllRead,
+} from "../../store/notificationsSlice";
 
 const DashboardTopBar = ({ location, isDark, toggleTheme }) => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const user = useSelector((s) => s.auth.user);
+  const notifications = useSelector(selectNotifications);
+  const unreadCount = useSelector(selectUnreadCount);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [recent, setRecent] = useState(loadRecentSearches);
   const [trending, setTrending] = useState([]);
 
   const searchRef = useRef(null);
+  const notifRef = useRef(null);
+
+  const firstName = user?.name?.split(" ")[0] || null;
 
   useEffect(() => {
     getTrendingSearches()
@@ -61,6 +75,9 @@ const DashboardTopBar = ({ location, isDark, toggleTheme }) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setSearchFocused(false);
       }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -88,36 +105,58 @@ const DashboardTopBar = ({ location, isDark, toggleTheme }) => {
     goToSearch(searchQuery);
   };
 
-  const locationLabel = location?.savedLabel || (location?.address ? location.address.split(",")[0] : "Your Location");
-
-  const glassClasses =
-    "bg-white/40 dark:bg-[#1A1A1A]/40 backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.2)]";
+  const locationLabel =
+    location?.savedLabel ||
+    (location?.address ? location.address.split(",")[0] : "Your Location");
 
   const showAssist = searchFocused && !searchQuery.trim();
   const showSuggestions = searchFocused && searchQuery.trim() && suggestions.length > 0;
 
+  const openNotifs = () => {
+    setNotifOpen((v) => !v);
+    if (unreadCount > 0) dispatch(markAllRead());
+  };
+
   return (
-    <div className="sticky top-0 z-40 px-6 md:px-8 py-3 flex items-center justify-between gap-4 md:gap-6 bg-transparent">
-      <div className="relative flex-1 max-w-2xl" ref={searchRef}>
+    <div className="sticky top-0 z-40 px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 sm:gap-5 bg-transparent">
+      {/* Greeting */}
+      <div className="hidden sm:block min-w-0 shrink-0 max-w-[200px] lg:max-w-[260px]">
+        <h1 className="font-display text-xl lg:text-2xl font-extrabold text-foreground truncate leading-tight">
+          {firstName ? `Hello, ${firstName}` : "Hello there"}
+        </h1>
+        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+          What do you want to eat today?
+        </p>
+      </div>
+
+      {/* Search */}
+      <div className="relative flex-1 max-w-xl mx-auto" ref={searchRef}>
         <form onSubmit={handleSearch}>
           <div
-            className={`flex items-center px-1.5 h-11 rounded-full ${glassClasses} transition-all duration-300 ${
-              searchFocused ? "ring-2 ring-white/80 dark:ring-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.1)]" : ""
+            className={`elevated-search flex items-center h-12 rounded-full px-2 transition-all duration-300 ${
+              searchFocused ? "ring-2 ring-primary/25 shadow-[0_8px_28px_-6px_var(--shadow-soft)]" : ""
             }`}
           >
+            <button
+              type="submit"
+              className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center shrink-0 shadow-[0_4px_14px_-2px_var(--shadow-soft)] hover:bg-primary-hover transition-colors"
+              aria-label="Search"
+            >
+              <FaSearch size={13} />
+            </button>
             <input
               type="text"
               placeholder="Search restaurants, dishes, cuisines…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setSearchFocused(true)}
-              className="flex-1 h-full bg-transparent border-none outline-none text-[14px] font-semibold px-4 text-gray-800 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
+              className="flex-1 h-full bg-transparent border-none outline-none text-[14px] font-semibold px-3 text-foreground placeholder:text-muted-foreground"
             />
             {supported && (
               <button
                 type="button"
                 onClick={startVoice}
-                className={`w-8 h-8 rounded-full flex items-center justify-center mr-1 transition-all ${
+                className={`w-8 h-8 rounded-full flex items-center justify-center mr-0.5 transition-all ${
                   listening ? "bg-primary text-white animate-pulse" : "text-primary hover:bg-primary/10"
                 }`}
                 aria-label="Voice search"
@@ -132,26 +171,17 @@ const DashboardTopBar = ({ location, isDark, toggleTheme }) => {
                   setSearchQuery("");
                   setSuggestions([]);
                 }}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors mr-2 font-bold"
+                className="text-muted-foreground hover:text-foreground transition-colors mr-2 font-bold text-sm"
                 aria-label="Clear search"
               >
                 ✕
               </button>
             )}
-            <button
-              type="submit"
-              className="w-8 h-8 rounded-full bg-white/80 dark:bg-[#2A2A2A]/80 shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-[#333] hover:scale-105 transition-all"
-              aria-label="Search"
-            >
-              <FaSearch size={12} />
-            </button>
           </div>
         </form>
 
         {showAssist && (
-          <div
-            className={`absolute top-14 left-0 right-0 rounded-3xl overflow-hidden z-50 animate-slide-up ${glassClasses} !bg-white/70 dark:!bg-[#1A1A1A]/80 max-h-[70vh] overflow-y-auto`}
-          >
+          <div className="absolute top-14 left-0 right-0 elevated-panel overflow-hidden z-50 animate-slide-up max-h-[70vh] overflow-y-auto">
             <SearchAssistPanel
               recent={recent}
               trending={trending}
@@ -166,9 +196,7 @@ const DashboardTopBar = ({ location, isDark, toggleTheme }) => {
         )}
 
         {showSuggestions && (
-          <div
-            className={`absolute top-14 left-0 right-0 rounded-3xl overflow-hidden z-50 animate-slide-up ${glassClasses} !bg-white/70 dark:!bg-[#1A1A1A]/80`}
-          >
+          <div className="absolute top-14 left-0 right-0 elevated-panel overflow-hidden z-50 animate-slide-up">
             {suggestions.map((r) => (
               <button
                 key={r.id}
@@ -177,9 +205,9 @@ const DashboardTopBar = ({ location, isDark, toggleTheme }) => {
                   navigate(`/home/restaurants/${r.id}`);
                   setSearchFocused(false);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/40 dark:hover:bg-white/10 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-primary/5 transition-colors text-left"
               >
-                <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 bg-gray-100/50 dark:bg-gray-800/50">
+                <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 bg-muted">
                   {r.imageUrl && (
                     <img
                       src={r.imageUrl}
@@ -192,13 +220,13 @@ const DashboardTopBar = ({ location, isDark, toggleTheme }) => {
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[14px] font-bold text-gray-900 dark:text-white truncate">{r.name}</p>
-                  <p className="text-[12px] font-medium text-gray-600 dark:text-gray-400 truncate mt-0.5">
+                  <p className="text-[14px] font-bold text-foreground truncate">{r.name}</p>
+                  <p className="text-[12px] font-medium text-muted-foreground truncate mt-0.5">
                     {Array.isArray(r.cuisines) ? r.cuisines.slice(0, 2).join(" · ") : r.cuisines}
                     {r.matchedDishes?.length > 0 && ` · ${r.matchedDishes[0]}`}
                   </p>
                 </div>
-                <span className="ml-auto text-[#FF5A5F] font-bold shrink-0 text-sm">→</span>
+                <span className="ml-auto text-primary font-bold shrink-0 text-sm">→</span>
               </button>
             ))}
             <button
@@ -212,34 +240,71 @@ const DashboardTopBar = ({ location, isDark, toggleTheme }) => {
         )}
       </div>
 
-      <div className="flex items-center gap-2.5 md:gap-3 shrink-0">
-        <button
-          type="button"
-          className={`hidden sm:flex w-11 h-11 rounded-full ${glassClasses} items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-white/10 hover:scale-105 transition-all`}
-        >
-          <FiBell size={18} />
-        </button>
-
+      {/* Actions: compact location · notifications · theme */}
+      <div className="flex items-center gap-2 shrink-0">
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event("openLocationSidebar"))}
-          className={`h-11 px-4 rounded-full ${glassClasses} flex items-center gap-2 text-[14px] font-bold text-gray-700 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-white/10 hover:scale-105 transition-all shrink-0`}
+          title={locationLabel}
+          className="elevated-icon-btn h-11 rounded-2xl flex items-center gap-2 text-[13px] font-bold text-foreground hover:-translate-y-0.5 transition-all px-3 xl:w-11 xl:px-0 xl:justify-center"
         >
-          <FaMapMarkerAlt size={14} className="text-[#FF5A5F]" />
-          <span className="max-w-[100px] truncate hidden md:inline">{locationLabel}</span>
-          <FaChevronDown size={10} className="text-gray-500 ml-0.5" />
+          <FaMapMarkerAlt size={14} className="text-primary shrink-0" />
+          <span className="max-w-[88px] truncate xl:hidden">{locationLabel}</span>
+          <FaChevronDown size={9} className="text-muted-foreground xl:hidden" />
         </button>
+
+        <div className="relative" ref={notifRef}>
+          <button
+            type="button"
+            onClick={openNotifs}
+            aria-label="Notifications"
+            className="elevated-icon-btn relative w-11 h-11 rounded-2xl flex items-center justify-center text-foreground hover:-translate-y-0.5 transition-all"
+          >
+            <FiBell size={18} />
+            {unreadCount > 0 && (
+              <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-primary ring-2 ring-[var(--color-bg-card)]" />
+            )}
+          </button>
+
+          {notifOpen && (
+            <div className="absolute right-0 top-full mt-2 w-72 elevated-panel overflow-hidden z-50 animate-slide-up">
+              <div className="px-4 py-3 border-b border-border/60 flex items-center justify-between">
+                <p className="text-sm font-bold text-foreground">Notifications</p>
+                <span className="text-[11px] text-muted-foreground">{notifications.length}</span>
+              </div>
+              <div className="max-h-64 overflow-y-auto scrollbar-hide">
+                {notifications.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+                    You&apos;re all caught up
+                  </p>
+                ) : (
+                  notifications.slice(0, 8).map((n) => (
+                    <div
+                      key={n.id}
+                      className="px-4 py-3 border-b border-border/40 last:border-0 hover:bg-primary/5"
+                    >
+                      <p className="text-xs font-bold text-foreground">{n.title || "Update"}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
+                        {n.message || n.body}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         <button
           type="button"
           onClick={toggleTheme}
           aria-label="Toggle theme"
-          className={`w-11 h-11 rounded-full ${glassClasses} flex items-center justify-center hover:bg-white/60 dark:hover:bg-white/10 hover:scale-105 transition-all shrink-0`}
+          className="elevated-icon-btn w-11 h-11 rounded-2xl flex items-center justify-center hover:-translate-y-0.5 transition-all"
         >
           {isDark ? (
             <FiSun size={18} className="text-amber-400" />
           ) : (
-            <FiMoon size={18} className="text-indigo-600" />
+            <FiMoon size={18} className="text-foreground/70" />
           )}
         </button>
       </div>

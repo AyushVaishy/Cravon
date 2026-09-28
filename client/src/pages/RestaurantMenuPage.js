@@ -1,12 +1,17 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
 import useRestaurantMenu from "../hooks/useRestaurantMenu";
 import ShimmerMenu from "../components/ShimmerMenu";
 import RestaurantCategory from "../components/RestaurantCategory";
-import { FaStar, FaArrowLeft, FaMapMarkerAlt, FaClock, FaSearch, FaRegStar } from "react-icons/fa";
+import {
+  MenuOffersBanner, MenuGallery, MenuItemSections, SimilarRestaurants,
+  RestaurantActions, ReportRestaurantModal,
+} from "../components/restaurant/RestaurantMenuExtras";
+import { FaStar, FaArrowLeft, FaMapMarkerAlt, FaClock, FaSearch, FaPhone, FaShareAlt } from "react-icons/fa";
 import { MdTwoWheeler } from "react-icons/md";
 import { useSelector, useDispatch } from "react-redux";
 import { viewRestaurant } from "../store/recentlyViewedSlice";
+import { addBrowseHistory } from "../services/favoritesService";
 import { Link } from "react-router-dom";
 import { MdShoppingCart } from "react-icons/md";
 
@@ -38,14 +43,19 @@ const getClosingStatus = (openingTime, closingTime) => {
 const RestaurantMenuPage = () => {
   const { resId } = useParams();
   const navigate = useNavigate();
-  const { restaurant, menu, loading, error } = useRestaurantMenu(resId);
+  const { location } = useOutletContext() || {};
+  const { restaurant, menu, bestsellers, recommended, combos, loading, error } = useRestaurantMenu(resId);
   const cartItems = useSelector((s) => s.cart.items);
+  const { user } = useSelector((s) => s.auth);
   const cartCount = cartItems.reduce((acc, i) => acc + i.quantity, 0);
+  const cartRestaurantCount = new Set(cartItems.map((i) => i.restaurantId).filter(Boolean)).size;
   const dispatch = useDispatch();
 
   const [scrolled, setScrolled] = useState(false);
   const [menuSearch, setMenuSearch] = useState('');
   const [vegOnly, setVegOnly] = useState(false);
+  const [nonVegOnly, setNonVegOnly] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 180);
@@ -54,8 +64,11 @@ const RestaurantMenuPage = () => {
   }, []);
 
   useEffect(() => {
-    if (restaurant) dispatch(viewRestaurant(restaurant));
-  }, [restaurant]); // eslint-disable-line
+    if (restaurant) {
+      dispatch(viewRestaurant(restaurant));
+      if (user) addBrowseHistory(restaurant.id).catch(() => {});
+    }
+  }, [restaurant, user]); // eslint-disable-line
 
   // ALL hooks must be called before any conditional returns
   const filteredCategories = useMemo(() => {
@@ -64,6 +77,7 @@ const RestaurantMenuPage = () => {
       .map(([title, items]) => {
         let filtered = items;
         if (vegOnly) filtered = filtered.filter(i => i.isVeg);
+        if (nonVegOnly) filtered = filtered.filter(i => !i.isVeg);
         if (menuSearch.trim()) {
           const q = menuSearch.toLowerCase();
           filtered = filtered.filter(i =>
@@ -74,7 +88,7 @@ const RestaurantMenuPage = () => {
         return [title, filtered];
       })
       .filter(([, items]) => items.length > 0);
-  }, [menu, menuSearch, vegOnly]);
+  }, [menu, menuSearch, vegOnly, nonVegOnly]);
 
   if (loading) return <ShimmerMenu />;
   if (error)
@@ -93,6 +107,8 @@ const RestaurantMenuPage = () => {
   const PLACEHOLDER =
     "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&h=400&fit=crop";
   const closingStatus = getClosingStatus(restaurant.openingTime, restaurant.closingTime);
+  const orderingDisabled = !restaurant.isOpen || !closingStatus.isOpen;
+  const galleryImages = [restaurant.imageUrl, ...(restaurant.galleryUrls || [])].filter(Boolean);
 
   return (
     <div className="min-h-screen bg-background">
@@ -168,7 +184,12 @@ const RestaurantMenuPage = () => {
         </div>
       </div>
 
-      {/* ── Closes Soon Banner ── */}
+      {/* ── Closes Soon / Closed Banner ── */}
+      {orderingDisabled && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 px-4 py-2.5 text-red-700 dark:text-red-300 text-sm font-semibold">
+          🔴 Restaurant is closed — browsing only. Ordering is disabled.
+        </div>
+      )}
       {closingStatus.isOpen && closingStatus.closingIn !== null && closingStatus.closingIn < 60 && (
         <div className="bg-primary/10 border-l-4 border-primary px-4 py-2.5 text-primary text-sm font-semibold flex items-center gap-2">
           ⚠️ Closes in {closingStatus.closingIn} mins — order quickly!
@@ -177,6 +198,22 @@ const RestaurantMenuPage = () => {
 
       {/* ── Menu ── */}
       <div className="max-w-3xl mx-auto px-4 py-8">
+        {restaurant.description && (
+          <p className="text-muted-foreground text-sm mb-4 leading-relaxed">{restaurant.description}</p>
+        )}
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mb-4">
+          {restaurant.phone && (
+            <a href={`tel:${restaurant.phone}`} className="flex items-center gap-1 hover:text-primary">
+              <FaPhone size={10} /> {restaurant.phone}
+            </a>
+          )}
+          {restaurant.fssaiNumber && <span>FSSAI: {restaurant.fssaiNumber}</span>}
+        </div>
+
+        <RestaurantActions restaurant={restaurant} onReport={() => setReportOpen(true)} />
+        <MenuOffersBanner offerTag={restaurant.offerTag} />
+        <MenuGallery images={galleryImages} name={restaurant.name} />
+
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-6">
           Menu
           {categories.length > 0 && (
@@ -202,24 +239,37 @@ const RestaurantMenuPage = () => {
             )}
           </div>
           <button
-            onClick={() => setVegOnly(v => !v)}
+            onClick={() => { setVegOnly(v => !v); if (!vegOnly) setNonVegOnly(false); }}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-all flex-shrink-0 ${
-              vegOnly
-                ? 'bg-green-600 border-green-600 text-white'
-                : 'bg-card border-border text-foreground hover:border-green-400'
+              vegOnly ? 'bg-green-600 border-green-600 text-white' : 'bg-card border-border text-foreground hover:border-green-400'
             }`}
           >
-            <span className={`w-3 h-3 rounded-sm border-2 flex items-center justify-center ${vegOnly ? 'border-white' : 'border-green-600'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${vegOnly ? 'bg-white' : 'bg-green-600'}`} />
-            </span>
             Veg Only
           </button>
-          {(menuSearch || vegOnly) && (
+          <button
+            onClick={() => { setNonVegOnly(v => !v); if (!nonVegOnly) setVegOnly(false); }}
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-all flex-shrink-0 ${
+              nonVegOnly ? 'bg-red-600 border-red-600 text-white' : 'bg-card border-border text-foreground hover:border-red-400'
+            }`}
+          >
+            Non-Veg
+          </button>
+          {(menuSearch || vegOnly || nonVegOnly) && (
             <span className="text-xs text-muted-foreground">
               {filteredCategories.reduce((s, [, items]) => s + items.length, 0)} items found
             </span>
           )}
         </div>
+
+        {recommended.length > 0 && (
+          <MenuItemSections title="Recommended for you" items={recommended} restaurant={restaurant} orderingDisabled={orderingDisabled} />
+        )}
+        {bestsellers.length > 0 && (
+          <MenuItemSections title="Bestsellers" items={bestsellers} restaurant={restaurant} orderingDisabled={orderingDisabled} />
+        )}
+        {combos.length > 0 && (
+          <MenuItemSections title="Combo Meals" items={combos} restaurant={restaurant} orderingDisabled={orderingDisabled} />
+        )}
 
         {categories.length === 0 ? (
           <p className="text-center text-muted-foreground py-12">No menu items available.</p>
@@ -231,12 +281,14 @@ const RestaurantMenuPage = () => {
                 title={title}
                 items={items}
                 restaurantName={restaurant.name}
+                restaurantId={restaurant.id}
+                orderingDisabled={orderingDisabled}
               />
             ))}
-            {filteredCategories.length === 0 && (menuSearch || vegOnly) && (
+            {filteredCategories.length === 0 && (menuSearch || vegOnly || nonVegOnly) && (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-2">No items match your search</p>
-                <button onClick={() => { setMenuSearch(''); setVegOnly(false); }} className="text-primary hover:underline text-sm">Clear filters</button>
+                <button onClick={() => { setMenuSearch(''); setVegOnly(false); setNonVegOnly(false); }} className="text-primary hover:underline text-sm">Clear filters</button>
               </div>
             )}
           </div>
@@ -301,6 +353,13 @@ const RestaurantMenuPage = () => {
                 {review.comment && (
                   <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
                 )}
+                {review.images?.length > 0 && (
+                  <div className="flex gap-2 mt-2 overflow-x-auto">
+                    {review.images.map((img, i) => (
+                      <img key={i} src={img} alt="" className="w-16 h-16 rounded-lg object-cover" />
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-2">
                   {new Date(review.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                 </p>
@@ -310,6 +369,10 @@ const RestaurantMenuPage = () => {
         </div>
       )}
 
+      <SimilarRestaurants restaurantId={restaurant.id} lat={location?.lat} lng={location?.lng} />
+
+      <ReportRestaurantModal open={reportOpen} onClose={() => setReportOpen(false)} restaurantId={restaurant.id} />
+
       {/* ── Floating cart bar ── */}
       {cartCount > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40">
@@ -318,7 +381,9 @@ const RestaurantMenuPage = () => {
             className="flex items-center gap-3 bg-primary/50 hover:bg-primary-hover text-white px-6 py-3 rounded-full shadow-xl font-semibold text-sm transition"
           >
             <MdShoppingCart size={18} />
-            {cartCount} item{cartCount > 1 ? "s" : ""} in cart · View Cart →
+            {cartCount} item{cartCount > 1 ? "s" : ""}
+            {cartRestaurantCount > 1 ? ` · ${cartRestaurantCount} restaurants` : ""}
+            {" "}· View Cart →
           </Link>
         </div>
       )}

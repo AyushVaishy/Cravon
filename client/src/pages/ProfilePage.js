@@ -33,7 +33,7 @@ import {
   formToPayload,
   defaultLabelTypeForNew,
 } from "../utils/addressLabels";
-import { selectFavourites } from "../store/favoritesSlice";
+import { selectFavourites, selectFavouriteMenuItems } from "../store/favoritesSlice";
 import RestaurantCard from "../components/RestaurantCard";
 import { validatePassword, PASSWORD_HINT } from "../utils/passwordValidation";
 import { resolveAvatarUrl } from "../utils/avatarUrl";
@@ -397,22 +397,48 @@ const OrdersTab = () => {
 // ─── Favourites Tab ───────────────────────────────────────────────────────────
 const FavouritesTab = () => {
   const favs = useSelector(selectFavourites);
-
-  if (favs.length === 0)
-    return (
-      <div className="flex flex-col items-center py-16 text-muted-foreground">
-        <FaHeart size={48} className="mb-4 text-muted-foreground" />
-        <p className="font-medium">No favourites yet</p>
-        <p className="text-sm mt-1">Tap the ❤️ on any restaurant to save it here.</p>
-        <Link to="/home" className="mt-4 text-primary hover:underline text-sm">Explore restaurants →</Link>
-      </div>
-    );
+  const savedDishes = useSelector(selectFavouriteMenuItems);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-      {favs.map((r) => (
-        <RestaurantCard key={r.id} resData={r} />
-      ))}
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-foreground">Saved Restaurants</h3>
+        <Link to="/home/browse-history" className="text-sm text-primary hover:underline">Browsing history →</Link>
+      </div>
+      {favs.length === 0 ? (
+        <div className="flex flex-col items-center py-10 text-muted-foreground">
+          <FaHeart size={40} className="mb-3 opacity-40" />
+          <p className="font-medium">No favourite restaurants yet</p>
+          <Link to="/home" className="mt-3 text-primary hover:underline text-sm">Explore restaurants →</Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {favs.map((r) => <RestaurantCard key={r.id} resData={r} />)}
+        </div>
+      )}
+
+      <div>
+        <h3 className="font-bold text-foreground mb-3">Saved Dishes</h3>
+        {savedDishes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Tap ❤️ on menu items to save dishes here.</p>
+        ) : (
+          <div className="space-y-2">
+            {savedDishes.map((item) => (
+              <Link
+                key={item.id}
+                to={`/home/restaurants/${item.restaurantId || item.restaurant?.id}`}
+                className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary transition"
+              >
+                {item.imageUrl && <img src={item.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />}
+                <div>
+                  <p className="font-semibold text-sm">{item.name}</p>
+                  <p className="text-xs text-muted-foreground">{item.restaurant?.name}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

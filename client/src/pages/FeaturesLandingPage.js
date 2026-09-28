@@ -42,18 +42,23 @@ const features = [
 const FeaturesLandingPage = () => {
   return (
     <LandingLayout>
-      <div className="mx-auto max-w-7xl px-6 pb-24 pt-32 md:px-8">
-        <div className="mb-24 space-y-6 text-center">
-          <h1 className="text-5xl font-bold text-app-primary md:text-6xl">
+      <div className="landing-page-hero pb-8 pt-28">
+        <div className="mx-auto max-w-7xl space-y-5 px-5 text-center md:px-8">
+          <p className="font-display text-sm font-semibold tracking-[0.22em] text-[#E31837] uppercase">
+            — Product —
+          </p>
+          <h1 className="font-display text-5xl font-extrabold tracking-tight text-[#1F1F1F] dark:text-white md:text-6xl">
             Powerful features for
             <br />
-            <span className="font-display text-brand">Smarter Ordering</span>
+            <span className="text-[#FF7A1A]">Smarter Ordering</span>
           </h1>
-          <p className="mx-auto max-w-2xl text-lg text-app-secondary">
+          <p className="mx-auto max-w-2xl text-lg text-[#6B6B6B] dark:text-white/65">
             Explore the product capabilities making Cravon one of the fastest-growing food platforms.
           </p>
         </div>
-
+        <div className="landing-torn mt-10" aria-hidden="true" />
+      </div>
+      <div className="mx-auto max-w-7xl px-5 pb-24 pt-10 md:px-8">
         <div className="space-y-28">
           {features.map((item, index) => (
             <div key={item.title} className="grid grid-cols-1 items-center gap-16 lg:grid-cols-2">
