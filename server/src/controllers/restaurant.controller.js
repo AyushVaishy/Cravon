@@ -1,39 +1,53 @@
 const prisma = require("../config/prisma");
 const { haversineKm, BROWSE_RADIUS_KM, isValidCoord } = require("../utils/geo");
+const {
+  applyRestaurantFilters,
+  sortRestaurants,
+  enrichWithDistance,
+  getOrderCountMap,
+} = require("../utils/restaurantFilters");
 
 const ALLOWED_UPDATE_FIELDS = [
-  "name", "description", "cuisines", "imageUrl", "lat", "lng",
-  "address", "city", "costForTwo", "deliveryTime", "openingTime",
-  "closingTime", "fssaiNumber", "phone",
+  "name", "description", "cuisines", "imageUrl", "logoUrl", "lat", "lng",
+  "address", "city", "costForTwo", "deliveryTime", "deliveryFee", "openingTime",
+  "closingTime", "fssaiNumber", "phone", "galleryUrls", "acceptsOnlinePayment",
 ];
 
 const getRestaurants = async (req, res, next) => {
   try {
-    const { lat, lng, radius = BROWSE_RADIUS_KM, page = 1, limit = 20 } = req.query;
+    const {
+      lat, lng, radius = BROWSE_RADIUS_KM, page = 1, limit = 20,
+      sortBy = "popularity",
+      cuisines, rating, costRange, deliveryTimeMax,
+      pureVeg, vegOnly, nonVegOnly, openNow, hasOffers, freeDelivery,
+      maxDistance, acceptsOnlinePayment, newRestaurants,
+    } = req.query;
+
     const pageNum = Math.max(1, Number(page));
     const limitNum = Math.min(100, Math.max(1, Number(limit)));
-    const radiusKm = Number(radius);
+    const radiusKm = Number(maxDistance || radius);
 
     const allRestaurants = await prisma.restaurant.findMany({
       where: { isApproved: true },
-      orderBy: { avgRating: "desc" },
     });
 
-    let source = allRestaurants;
+    let source = enrichWithDistance(allRestaurants, lat, lng);
     if (isValidCoord(lat, lng)) {
-      source = allRestaurants
-        .map((r) => ({
-          ...r,
-          distanceKm: Math.round(haversineKm(Number(lat), Number(lng), r.lat, r.lng) * 10) / 10,
-        }))
-        .filter((r) => r.distanceKm <= radiusKm)
-        .sort((a, b) => {
-          if (a.isOpen !== b.isOpen) return a.isOpen ? -1 : 1;
-          return a.distanceKm - b.distanceKm;
-        });
+      source = source.filter((r) => r.distanceKm <= Number(radius));
     } else {
       source = [];
     }
+
+    const orderCountMap = await getOrderCountMap(prisma, source.map((r) => r.id));
+
+    source = applyRestaurantFilters(source, {
+      cuisines, rating, costRange, deliveryTimeMax,
+      pureVeg, vegOnly, nonVegOnly, openNow, hasOffers, freeDelivery,
+      maxDistance: maxDistance || null,
+      acceptsOnlinePayment, newRestaurants,
+    }, orderCountMap);
+
+    source = sortRestaurants(source, sortBy, orderCountMap);
 
     const total = source.length;
     const restaurants = source.slice((pageNum - 1) * limitNum, pageNum * limitNum);
@@ -282,7 +296,7 @@ const toggleRestaurantOpen = async (req, res, next) => {
 
 const createReview = async (req, res, next) => {
   try {
-    const { rating, comment } = req.body;
+    const { rating, comment, images } = req.body;
     const restaurantId = req.params.id;
 
     if (!rating || rating < 1 || rating > 5) {
@@ -294,8 +308,18 @@ const createReview = async (req, res, next) => {
 
     const review = await prisma.review.upsert({
       where: { userId_restaurantId: { userId: req.user.id, restaurantId } },
-      update: { rating, comment: comment || null },
-      create: { userId: req.user.id, restaurantId, rating, comment: comment || null },
+      update: {
+        rating,
+        comment: comment || null,
+        images: Array.isArray(images) ? images.slice(0, 5) : [],
+      },
+      create: {
+        userId: req.user.id,
+        restaurantId,
+        rating,
+        comment: comment || null,
+        images: Array.isArray(images) ? images.slice(0, 5) : [],
+      },
       include: { user: { select: { name: true } } },
     });
 
@@ -318,8 +342,60 @@ const createReview = async (req, res, next) => {
   }
 };
 
+const getSimilarRestaurants = async (req, res, next) => {
+  try {
+    const { lat, lng } = req.query;
+    const restaurant = await prisma.restaurant.findUnique({ where: { id: req.params.id } });
+    if (!restaurant) return res.status(404).json({ message: "Restaurant not found" });
+
+    const all = await prisma.restaurant.findMany({
+      where: { isApproved: true, id: { not: restaurant.id } },
+    });
+
+    const cuisineSet = new Set((restaurant.cuisines || []).map((c) => c.toLowerCase()));
+    let similar = enrichWithDistance(all, lat, lng)
+      .map((r) => {
+        const overlap = (r.cuisines || []).filter((c) => cuisineSet.has(c.toLowerCase())).length;
+        return { ...r, similarity: overlap };
+      })
+      .filter((r) => r.similarity > 0 && (r.distanceKm == null || r.distanceKm <= BROWSE_RADIUS_KM))
+      .sort((a, b) => {
+        if (b.similarity !== a.similarity) return b.similarity - a.similarity;
+        return parseFloat(b.avgRating || 0) - parseFloat(a.avgRating || 0);
+      })
+      .slice(0, 8);
+
+    res.json({ restaurants: similar });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const reportRestaurant = async (req, res, next) => {
+  try {
+    const { reason, details } = req.body;
+    if (!reason?.trim()) return res.status(400).json({ message: "Reason is required" });
+
+    const restaurant = await prisma.restaurant.findUnique({ where: { id: req.params.id } });
+    if (!restaurant) return res.status(404).json({ message: "Restaurant not found" });
+
+    await prisma.restaurantReport.create({
+      data: {
+        userId: req.user.id,
+        restaurantId: req.params.id,
+        reason: reason.trim(),
+        details: details?.trim() || null,
+      },
+    });
+    res.status(201).json({ message: "Report submitted. We'll review it shortly." });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getRestaurants, getRestaurant, searchRestaurants, getTrendingSearches,
   createRestaurant, updateRestaurant,
   getMyRestaurants, toggleRestaurantOpen, createReview,
+  getSimilarRestaurants, reportRestaurant,
 };

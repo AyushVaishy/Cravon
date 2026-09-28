@@ -51,6 +51,17 @@ const approveRestaurant = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const toggleFeaturedRestaurant = async (req, res, next) => {
+  try {
+    const { featured } = req.body;
+    const restaurant = await prisma.restaurant.update({
+      where: { id: req.params.id },
+      data: { isFeatured: !!featured },
+    });
+    res.json({ restaurant });
+  } catch (err) { next(err); }
+};
+
 const getAllOrders = async (req, res, next) => {
   try {
     const orders = await prisma.order.findMany({
@@ -77,4 +88,4 @@ const updateOrderStatus = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getStats, getUsers, getAllRestaurants, approveRestaurant, getAllOrders, updateOrderStatus };
+module.exports = { getStats, getUsers, getAllRestaurants, approveRestaurant, toggleFeaturedRestaurant, getAllOrders, updateOrderStatus };

@@ -307,6 +307,73 @@ async function main() {
   console.log(`   Users: ${USERS.length}`);
   console.log(`   Restaurants: ${PARSED.length}`);
   console.log(`   Menu items: ${menuTotal}`);
+
+  // ── Coupons & rewards demo data ─────────────────────────────────────────────
+  console.log("🎟️  Seeding coupons…");
+  const firstRestaurant = await prisma.restaurant.findFirst({ orderBy: { createdAt: "asc" } });
+  const demoUser = createdUsers["user1@cravon.com"];
+  if (demoUser) {
+    await prisma.user.update({
+      where: { id: demoUser.id },
+      data: {
+        membershipActive: true,
+        membershipExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        loyaltyPoints: 250,
+        walletBalance: 10000,
+        referralCode: "USER1DEMO",
+      },
+    });
+  }
+
+  const couponDefs = [
+    { code: "WELCOME50", title: "50% off first order", description: "Get 50% off up to ₹100 on your first order", type: "PERCENT", value: 50, maxDiscount: 10000, isFirstOrderOnly: true, tags: ["platform", "first-order"] },
+    { code: "CRAVON20", title: "20% off", description: "Flat 20% off on orders above ₹199", type: "PERCENT", value: 20, minOrderAmount: 19900, maxDiscount: 15000, tags: ["platform"] },
+    { code: "FREEDEL", title: "Free delivery", description: "Zero delivery fee on your order", type: "FREE_DELIVERY", value: 0, minOrderAmount: 14900, tags: ["platform", "free-delivery"] },
+    { code: "CASHBACK100", title: "₹100 cashback", description: "Get ₹100 wallet cashback after delivery", type: "CASHBACK", value: 10000, minOrderAmount: 29900, tags: ["cashback"] },
+    { code: "HDFC10", title: "HDFC Bank 10% off", description: "10% off with HDFC cards", type: "BANK_CASHBACK", value: 10, bankName: "HDFC", minOrderAmount: 39900, tags: ["bank"] },
+    { code: "CRAVONONE", title: "Cravon One exclusive", description: "₹75 off for members", type: "FIXED", value: 7500, minOrderAmount: 24900, isMembershipOnly: true, tags: ["membership"] },
+    { code: "REFERRAL50", title: "Referral reward", description: "₹50 off from referral program", type: "FIXED", value: 5000, minOrderAmount: 19900, tags: ["referral"] },
+  ];
+
+  for (const c of couponDefs) {
+    await prisma.coupon.upsert({
+      where: { code: c.code },
+      update: { ...c, isActive: true },
+      create: { id: require("crypto").randomUUID(), ...c, isActive: true },
+    });
+  }
+
+  if (firstRestaurant) {
+    await prisma.coupon.upsert({
+      where: { code: "RESTO15" },
+      update: {
+        title: `15% off at ${firstRestaurant.name}`,
+        description: "Restaurant exclusive offer",
+        type: "PERCENT",
+        value: 15,
+        maxDiscount: 8000,
+        restaurantId: firstRestaurant.id,
+        minOrderAmount: 14900,
+        isActive: true,
+        tags: ["restaurant"],
+      },
+      create: {
+        id: require("crypto").randomUUID(),
+        code: "RESTO15",
+        title: `15% off at ${firstRestaurant.name}`,
+        description: "Restaurant exclusive offer",
+        type: "PERCENT",
+        value: 15,
+        maxDiscount: 8000,
+        restaurantId: firstRestaurant.id,
+        minOrderAmount: 14900,
+        isActive: true,
+        tags: ["restaurant"],
+      },
+    });
+  }
+
+  console.log(`   Coupons: ${couponDefs.length + 1}`);
   console.log(`\n🔑 Test credentials (password: Test1234!)`);
   console.log(`   admin@cravon.com  → Admin`);
   console.log(`   owner1@cravon.com → Restaurant Owner (${Math.ceil(PARSED.length / 3)} restaurants)`);

@@ -1,0 +1,122 @@
+-- Enums
+CREATE TYPE "OrderType" AS ENUM ('DELIVERY', 'PICKUP');
+CREATE TYPE "PaymentMethod" AS ENUM ('COD', 'UPI', 'CARD', 'DEBIT_CARD', 'NETBANKING', 'WALLET');
+CREATE TYPE "CouponType" AS ENUM ('PERCENT', 'FIXED', 'FREE_DELIVERY', 'CASHBACK', 'BANK_CASHBACK');
+
+-- User rewards & referral
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "referredById" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "referralCode" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "loyaltyPoints" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "walletBalance" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "membershipActive" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "membershipExpiresAt" TIMESTAMP(3);
+CREATE UNIQUE INDEX IF NOT EXISTS "User_referralCode_key" ON "User"("referralCode");
+ALTER TABLE "User" ADD CONSTRAINT "User_referredById_fkey" FOREIGN KEY ("referredById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- Restaurant cart/checkout fields
+ALTER TABLE "Restaurant" ADD COLUMN IF NOT EXISTS "minOrderAmount" INTEGER NOT NULL DEFAULT 9900;
+ALTER TABLE "Restaurant" ADD COLUMN IF NOT EXISTS "maxItemQuantity" INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE "Restaurant" ADD COLUMN IF NOT EXISTS "packagingFee" INTEGER NOT NULL DEFAULT 1000;
+
+-- CartItem customizations
+ALTER TABLE "CartItem" ADD COLUMN IF NOT EXISTS "unitPrice" INTEGER;
+ALTER TABLE "CartItem" ADD COLUMN IF NOT EXISTS "customizations" JSONB;
+ALTER TABLE "CartItem" ADD COLUMN IF NOT EXISTS "itemNotes" TEXT;
+ALTER TABLE "CartItem" ADD COLUMN IF NOT EXISTS "lineKey" TEXT NOT NULL DEFAULT '';
+UPDATE "CartItem" SET "lineKey" = "menuItemId" WHERE "lineKey" = '';
+ALTER TABLE "CartItem" DROP CONSTRAINT IF EXISTS "CartItem_cartId_menuItemId_key";
+CREATE UNIQUE INDEX IF NOT EXISTS "CartItem_cartId_lineKey_key" ON "CartItem"("cartId", "lineKey");
+
+-- Order checkout fields
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "restaurantNotes" TEXT;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "orderType" "OrderType" NOT NULL DEFAULT 'DELIVERY';
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "paymentMethod" "PaymentMethod" NOT NULL DEFAULT 'COD';
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "scheduledFor" TIMESTAMP(3);
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "tipAmount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "packagingFee" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "platformFee" INTEGER NOT NULL DEFAULT 500;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "deliveryFeeAmount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "gstAmount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "discountAmount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "walletUsed" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "couponCode" TEXT;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "couponId" TEXT;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "cashbackAmount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "loyaltyPointsEarned" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "estimatedDeliveryMinutes" INTEGER;
+
+-- Coupons
+CREATE TABLE IF NOT EXISTS "Coupon" (
+  "id" TEXT NOT NULL,
+  "code" TEXT NOT NULL,
+  "title" TEXT NOT NULL,
+  "description" TEXT,
+  "type" "CouponType" NOT NULL,
+  "value" INTEGER NOT NULL,
+  "minOrderAmount" INTEGER NOT NULL DEFAULT 0,
+  "maxDiscount" INTEGER,
+  "restaurantId" TEXT,
+  "isFirstOrderOnly" BOOLEAN NOT NULL DEFAULT false,
+  "isMembershipOnly" BOOLEAN NOT NULL DEFAULT false,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "validFrom" TIMESTAMP(3),
+  "validUntil" TIMESTAMP(3),
+  "usageLimit" INTEGER,
+  "usageCount" INTEGER NOT NULL DEFAULT 0,
+  "bankName" TEXT,
+  "tags" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "Coupon_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "Coupon_code_key" ON "Coupon"("code");
+ALTER TABLE "Coupon" ADD CONSTRAINT "Coupon_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Order" ADD CONSTRAINT "Order_couponId_fkey" FOREIGN KEY ("couponId") REFERENCES "Coupon"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+CREATE TABLE IF NOT EXISTS "CouponUsage" (
+  "id" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "couponId" TEXT NOT NULL,
+  "orderId" TEXT,
+  "usedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "CouponUsage_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "CouponUsage_userId_couponId_idx" ON "CouponUsage"("userId", "couponId");
+ALTER TABLE "CouponUsage" ADD CONSTRAINT "CouponUsage_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "CouponUsage" ADD CONSTRAINT "CouponUsage_couponId_fkey" FOREIGN KEY ("couponId") REFERENCES "Coupon"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "CouponUsage" ADD CONSTRAINT "CouponUsage_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+CREATE TABLE IF NOT EXISTS "SavedCart" (
+  "id" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "restaurantId" TEXT NOT NULL,
+  "items" JSONB NOT NULL,
+  "savedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "SavedCart_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "SavedCart_userId_idx" ON "SavedCart"("userId");
+ALTER TABLE "SavedCart" ADD CONSTRAINT "SavedCart_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE TABLE IF NOT EXISTS "WalletTransaction" (
+  "id" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "amount" INTEGER NOT NULL,
+  "type" TEXT NOT NULL,
+  "description" TEXT,
+  "orderId" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "WalletTransaction_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "WalletTransaction_userId_idx" ON "WalletTransaction"("userId");
+ALTER TABLE "WalletTransaction" ADD CONSTRAINT "WalletTransaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE TABLE IF NOT EXISTS "LoyaltyRedemption" (
+  "id" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "points" INTEGER NOT NULL,
+  "amount" INTEGER NOT NULL,
+  "orderId" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "LoyaltyRedemption_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "LoyaltyRedemption_userId_idx" ON "LoyaltyRedemption"("userId");
+ALTER TABLE "LoyaltyRedemption" ADD CONSTRAINT "LoyaltyRedemption_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

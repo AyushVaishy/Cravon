@@ -1,7 +1,8 @@
 const router = require("express").Router();
-const { getMenu, getMenuAll, addMenuItem, updateMenuItem, deleteMenuItem } = require("../controllers/menu.controller");
+const { getMenu, getMenuAll, addMenuItem, updateMenuItem, deleteMenuItem, rateMenuItems } = require("../controllers/menu.controller");
 const { authenticate, authorize } = require("../middleware/auth.middleware");
 
+router.post("/items/ratings", authenticate, rateMenuItems);
 router.get("/:restaurantId", getMenu);
 router.get("/:restaurantId/all", authenticate, authorize("RESTAURANT_OWNER", "ADMIN"), getMenuAll);
 router.post("/:restaurantId", authenticate, authorize("RESTAURANT_OWNER", "ADMIN"), addMenuItem);

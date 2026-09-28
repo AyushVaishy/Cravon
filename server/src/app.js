@@ -17,6 +17,9 @@ const addressRoutes = require("./routes/address.routes");
 const adminRoutes = require("./routes/admin.routes");
 const locationRoutes = require("./routes/location.routes");
 const discoveryRoutes = require("./routes/discovery.routes");
+const favoritesRoutes = require("./routes/favorites.routes");
+const couponRoutes = require("./routes/coupon.routes");
+const rewardsRoutes = require("./routes/rewards.routes");
 const aiRoutes = require("./routes/ai.routes");
 
 const app = express();
@@ -82,6 +85,9 @@ app.use("/api/addresses", addressRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/location", locationRoutes);
 app.use("/api/discovery", discoveryRoutes);
+app.use("/api/favorites", favoritesRoutes);
+app.use("/api/coupons", couponRoutes);
+app.use("/api/rewards", rewardsRoutes);
 app.use("/api/ai", aiRoutes);
 
 // Health check
